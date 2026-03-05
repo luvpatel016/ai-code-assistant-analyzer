@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Editor from "@monaco-editor/react";
 
 const TASKS = [
   "Find bugs and fix suggestions",
@@ -124,22 +125,12 @@ export default function Page() {
 </button>
       </div>
 
-      <textarea
+      <Editor
+  height="400px"
+  defaultLanguage={language}
+  theme="vs-dark"
   value={code}
-  onChange={(e) => setCode(e.target.value)}
-  placeholder="Paste your code here..."
-  rows={14}
-  style={{
-    width: "100%",
-    marginTop: 14,
-    padding: 12,
-    fontFamily: "monospace",
-    fontSize: 14,
-    backgroundColor: "#111",
-    color: "#010101",
-    borderRadius: "8px",
-    border: "1px solid #333"
-  }}
+  onChange={(value) => setCode(value || "")}
 />
 
       <h2 style={{ marginTop: 18, fontSize: 18 }}>Output</h2>
