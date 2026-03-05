@@ -117,10 +117,31 @@ export default function Page() {
 
     monaco.editor.setModelMarkers(model, "ai-review", markers);
   }
+function prettifyMarkdown(raw: string) {
+  let t = raw.trim();
+
+  // Normalize common non-markdown headings into markdown headings
+  t = t.replace(/^SECTION 1.*$/gim, "");
+  t = t.replace(/^\s*Summary\s*$/gim, "## Summary");
+  t = t.replace(/^\s*Issues\s*$/gim, "## Issues");
+  t = t.replace(/^\s*Improvements\s*$/gim, "## Improvements");
+  t = t.replace(/^\s*Fix(ed)? Example.*$/gim, "## Fix");
+
+  // Ensure blank line after headings
+  t = t.replace(/^(## .+)\s*$/gim, "$1\n");
+
+  // If lines start with "Line X:" convert to bullets
+  t = t.replace(/^(Line\s+\d+:\s+)/gim, "- $1");
+
+  // Collapse extra blank lines
+  t = t.replace(/\n{3,}/g, "\n\n");
+
+  return t.trim();
+}
 
   async function analyze() {
     setLoading(true);
-    setResult("");
+    setResult(prettifyMarkdown(""));
     clearMarkers();
 
     try {
@@ -267,6 +288,10 @@ export default function Page() {
 
       <h2 style={{ marginTop: 18, fontSize: 18 }}>Output</h2>
 
+<ReactMarkdown remarkPlugins={[remarkGfm]}>
+  {result || "_"}
+</ReactMarkdown>
+
       <div
         style={{
           padding: 16,
@@ -277,9 +302,56 @@ export default function Page() {
           lineHeight: 1.6,
         }}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {result || "Run the analyzer to see results."}
-        </ReactMarkdown>
+        <ReactMarkdown
+  remarkPlugins={[remarkGfm]}
+  components={{
+    h2: ({ children }) => (
+      <h2 style={{ marginTop: 16, marginBottom: 8, fontSize: 18 }}>
+        {children}
+      </h2>
+    ),
+    ul: ({ children }) => (
+      <ul style={{ paddingLeft: 18, marginTop: 6, marginBottom: 6 }}>
+        {children}
+      </ul>
+    ),
+    li: ({ children }) => (
+      <li style={{ marginBottom: 6 }}>
+        {children}
+      </li>
+    ),
+    p: ({ children }) => (
+      <p style={{ marginTop: 8, marginBottom: 8 }}>
+        {children}
+      </p>
+    ),
+    code: ({ children }) => (
+      <code
+        style={{
+          background: "#111",
+          padding: "2px 6px",
+          borderRadius: 6,
+        }}
+      >
+        {children}
+      </code>
+    ),
+    pre: ({ children }) => (
+      <pre
+        style={{
+          background: "#0b0b0b",
+          padding: 12,
+          borderRadius: 10,
+          overflowX: "auto",
+        }}
+      >
+        {children}
+      </pre>
+    ),
+  }}
+>
+  {result || "Run the analyzer to see results."}
+</ReactMarkdown>
       </div>
     </main>
   );

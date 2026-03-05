@@ -34,33 +34,20 @@ export async function POST(req: Request) {
     }
 
     const prompt = `
-You are a senior FAANG software engineer reviewing code.
+You are a senior software engineer. Return clean, readable Markdown.
 
-You MUST return TWO sections in this order:
+FORMAT RULES (mandatory):
+- Use EXACT headings with ##:
+  ## Summary
+  ## Issues
+  ## Fix
+  ## Improvements
+- Put a blank line after every heading.
+- Use bullet points under Issues and Improvements.
+- If there is a fix, include ONE code block under Fix with the corrected code.
+- Keep it short and super readable.
 
-------------------------------------------------
-
-SECTION 1 — Markdown Review
-
-Provide a clean markdown report with:
-
-## Summary
-Brief explanation of the code.
-
-## Issues
-Bullet list of problems.
-
-## Improvements
-Suggestions for better code.
-
-## Fixed Example (if applicable)
-Provide corrected code if there are bugs.
-
-------------------------------------------------
-
-SECTION 2 — Diagnostics JSON
-
-Return a JSON block exactly like this:
+Then include diagnostics JSON EXACTLY like this at the end:
 
 \`\`\`json
 {
@@ -70,26 +57,7 @@ Return a JSON block exactly like this:
 }
 \`\`\`
 
-Rules:
-
-- "line" must be a real line number
-- severity must be one of:
-  error
-  warning
-  info
-- include **0 to 10 diagnostics**
-- if none exist return:
-
-\`\`\`json
-{
-  "diagnostics": []
-}
-\`\`\`
-
-------------------------------------------------
-
 Task: ${task}
-
 Language: ${language}
 
 Code:
