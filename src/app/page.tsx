@@ -27,39 +27,34 @@ type Diagnostic = {
 };
 
 function stripJsonBlock(raw: string) {
-  // Remove the fenced ```json ... ``` block from the markdown so it doesn't show in Output.
   return raw.replace(/```json[\s\S]*?```/g, "").trim();
 }
 
 function safeParseDiagnostics(raw: string): Diagnostic[] {
-  // Looks for:
-  // ```json
-  // { "diagnostics": [ ... ] }
-  // ```
   const match = raw.match(/```json([\s\S]*?)```/);
   if (!match) return [];
 
   try {
-    const parsed = JSON.parse(match[1]);
-    const list = (parsed?.diagnostics ?? []) as unknown;
+    const parsed = JSON.parse(match[1]) as unknown;
+    if (typeof parsed !== "object" || parsed === null) return [];
+    const rec = parsed as Record<string, unknown>;
 
+    const list = rec.diagnostics;
     if (!Array.isArray(list)) return [];
 
     const diags: Diagnostic[] = list
       .map((d: unknown): Diagnostic | null => {
         if (typeof d !== "object" || d === null) return null;
-        const rec = d as Record<string, unknown>;
+        const r = d as Record<string, unknown>;
 
-        const line = Number(rec.line);
-        const message = String(rec.message ?? "Issue");
-
-        const sevRaw = rec.severity;
-        const severity: Diagnostic["severity"] =
-          sevRaw === "warning" || sevRaw === "info" || sevRaw === "error"
-            ? sevRaw
-            : "error";
-
+        const line = Number(r.line);
         if (!Number.isFinite(line) || line < 1) return null;
+
+        const message = String(r.message ?? "Issue");
+
+        const sevRaw = r.severity;
+        const severity: Diagnostic["severity"] =
+          sevRaw === "warning" || sevRaw === "info" || sevRaw === "error" ? sevRaw : "error";
 
         return { line, message, severity };
       })
@@ -75,19 +70,19 @@ function safeParseDiagnostics(raw: string): Diagnostic[] {
 function prettifyMarkdown(raw: string) {
   let t = raw.trim();
 
-  // Remove any "SECTION 1" type lines if the model outputs them
-  t = t.replace(/^SECTION\s+\d+.*$/gim, "");
+  // remove SECTION lines if the model includes them
+  t = t.replace(/^SECTION\s+\d+.*$/gim, "").trim();
 
-  // Normalize common plain headings into markdown headings
+  // normalize headings if model outputs “Summary” etc.
   t = t.replace(/^\s*Summary\s*$/gim, "## Summary");
   t = t.replace(/^\s*Issues\s*$/gim, "## Issues");
   t = t.replace(/^\s*Improvements\s*$/gim, "## Improvements");
-  t = t.replace(/^\s*Fix(ed)? Example.*$/gim, "## Fix Example");
+  t = t.replace(/^\s*Fix(ed)? Example.*$/gim, "## Fixed Example");
 
-  // Convert "Line X:" into bullets
+  // help convert "Line 4:" lines into bullets
   t = t.replace(/^(Line\s+\d+:\s+)/gim, "- $1");
 
-  // Collapse extra blank lines
+  // reduce spammy blank lines
   t = t.replace(/\n{3,}/g, "\n\n");
 
   return t.trim();
@@ -101,6 +96,7 @@ export default function Page() {
   const [task, setTask] = useState<Task>(TASKS[0]);
 
   const [result, setResult] = useState<string>("");
+  const [displayText, setDisplayText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
@@ -164,7 +160,10 @@ export default function Page() {
   async function analyze() {
     setLoading(true);
     setResult("");
+    setDisplayText("");
     clearMarkers();
+
+    let full = "";
 
     try {
       const res = await fetch("/api/analyze", {
@@ -173,42 +172,61 @@ export default function Page() {
         body: JSON.stringify({ code, language, task }),
       });
 
-      const data = (await res.json()) as unknown;
-
-      const getField = (obj: unknown, key: string): string | null => {
-        if (typeof obj !== "object" || obj === null) return null;
-        const rec = obj as Record<string, unknown>;
-        const v = rec[key];
-        if (v === undefined || v === null) return null;
-        return String(v);
-      };
-
       if (!res.ok) {
-        throw new Error(getField(data, "error") ?? "Request failed");
+        const err = await res.json().catch(() => ({} as unknown));
+        const msg =
+          typeof err === "object" && err !== null && "error" in err
+            ? String((err as Record<string, unknown>).error ?? "Request failed")
+            : `Request failed (${res.status})`;
+        throw new Error(msg);
       }
 
-      const raw = getField(data, "result") ?? "No result returned.";
-      const diagnostics = safeParseDiagnostics(raw);
+      if (!res.body) {
+        throw new Error("No response body (stream missing).");
+      }
 
-      const markdownOnly = prettifyMarkdown(stripJsonBlock(raw));
-      setResult(markdownOnly || "No output returned.");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
 
+      // live streaming: update output as we receive chunks
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        full += chunk;
+
+        // show stream live
+        setDisplayText(full);
+      }
+
+      // After streaming finishes:
+      const diagnostics = safeParseDiagnostics(full);
       applyMarkers(diagnostics);
+
+      const cleaned = prettifyMarkdown(stripJsonBlock(full));
+      const finalText = cleaned || "No output returned.";
+
+      setResult(finalText);
+      setDisplayText(finalText);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      setResult(`## Error\n\n${msg}`);
+      const finalText = `## Error\n\n${msg}`;
+      setResult(finalText);
+      setDisplayText(finalText);
     } finally {
       setLoading(false);
     }
   }
 
-  const controlStyle: React.CSSProperties = {
-    backgroundColor: "#111",
-    color: "#fff",
-    border: "1px solid #333",
+  const selectStyle: React.CSSProperties = {
+    backgroundColor: "#3a3a3a",
+    color: "white",
+    border: "1px solid #555",
     padding: "8px 10px",
     borderRadius: 10,
     outline: "none",
+    cursor: "pointer",
   };
 
   return (
@@ -221,6 +239,23 @@ export default function Page() {
         color: "white",
       }}
     >
+      {/* Dropdown hover (dark red) */}
+      <style jsx>{`
+        select:hover {
+          background-color: #7f1d1d !important;
+          border-color: #7f1d1d !important;
+        }
+        select:focus {
+          outline: none;
+          border-color: #991b1b !important;
+          box-shadow: 0 0 0 2px rgba(153, 27, 27, 0.35);
+        }
+        option {
+          background-color: #3a3a3a;
+          color: white;
+        }
+      `}</style>
+
       <h1 style={{ fontSize: 28, fontWeight: 750, marginBottom: 6 }}>
         AI Code Assistant Analyzer
       </h1>
@@ -233,22 +268,18 @@ export default function Page() {
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value as Language)}
-          style={controlStyle}
+          style={selectStyle}
         >
           {LANGUAGES.map((lang) => (
-            <option key={lang} value={lang} style={{ color: "#000" }}>
+            <option key={lang} value={lang}>
               {lang}
             </option>
           ))}
         </select>
 
-        <select
-          value={task}
-          onChange={(e) => setTask(e.target.value as Task)}
-          style={controlStyle}
-        >
+        <select value={task} onChange={(e) => setTask(e.target.value as Task)} style={selectStyle}>
           {TASKS.map((t) => (
-            <option key={t} value={t} style={{ color: "#000" }}>
+            <option key={t} value={t}>
               {t}
             </option>
           ))}
@@ -323,14 +354,10 @@ export default function Page() {
           remarkPlugins={[remarkGfm]}
           components={{
             h2: ({ children }) => (
-              <h2 style={{ marginTop: 18, marginBottom: 8, fontSize: 18 }}>
-                {children}
-              </h2>
+              <h2 style={{ marginTop: 18, marginBottom: 8, fontSize: 18 }}>{children}</h2>
             ),
             ul: ({ children }) => (
-              <ul style={{ paddingLeft: 18, marginTop: 6, marginBottom: 10 }}>
-                {children}
-              </ul>
+              <ul style={{ paddingLeft: 18, marginTop: 6, marginBottom: 10 }}>{children}</ul>
             ),
             li: ({ children }) => <li style={{ marginBottom: 6 }}>{children}</li>,
             p: ({ children }) => <p style={{ marginTop: 8, marginBottom: 10 }}>{children}</p>,
@@ -354,7 +381,7 @@ export default function Page() {
             ),
           }}
         >
-          {result || "Run the analyzer to see results."}
+          {displayText || (loading ? "Generating..." : "Run the analyzer to see results.")}
         </ReactMarkdown>
       </div>
     </main>
