@@ -1,3 +1,5 @@
+LIVE DEMO: [PROJECT](https://ai-code-assistant-analyzer-luvpatel016s-projects.vercel.app?_vercel_share=6s0zsC6ZdZppyfkphia9tvyfyruntX4u)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
@@ -13,7 +15,7 @@ pnpm dev
 # or
 bun dev
 ```
-LIVE DEMO: [PROJECT](https://ai-code-assistant-analyzer-luvpatel016s-projects.vercel.app?_vercel_share=6s0zsC6ZdZppyfkphia9tvyfyruntX4u)
+
 
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
