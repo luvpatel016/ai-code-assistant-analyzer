@@ -13,7 +13,7 @@ pnpm dev
 # or
 bun dev
 ```
-OPEN THIS PROJECT USING THIS VERCEL LINK: [https://ai-code-assistant-analyzer-luvpatel016s-projects.vercel.app?_vercel_share=6s0zsC6ZdZppyfkphia9tvyfyruntX4u](AI PROJECT)
+OPEN THIS PROJECT USING THIS VERCEL LINK: [PROJECT](https://ai-code-assistant-analyzer-luvpatel016s-projects.vercel.app?_vercel_share=6s0zsC6ZdZppyfkphia9tvyfyruntX4u)
 
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
