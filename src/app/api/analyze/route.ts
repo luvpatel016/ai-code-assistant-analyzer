@@ -30,7 +30,9 @@ export async function POST(req: Request) {
     }
 
     const prompt = `
-You are a senior software engineer helping a student.
+You are a senior software engineer reviewing code.
+
+Respond ONLY in clean Markdown format.
 
 Task: ${task}
 Language: ${language}
@@ -40,12 +42,28 @@ Code:
 ${code}
 \`\`\`
 
-Return:
-1) Bugs/issues (bullets)
-2) Explanation (simple)
-3) Improvements/refactor
-4) Time & space complexity (if applicable)
-5) 3 test cases (if applicable)
+Return your response using the following sections:
+
+## Summary
+Briefly explain what the code does.
+
+## Issues Found
+- List bugs or problems
+- Mention approximate line numbers if possible
+- If there are no issues, say "No major issues found."
+
+## Fix Suggestions
+- Provide clear bullet point improvements.
+
+## Improved Code
+Provide the corrected or improved version of the code inside ONE fenced code block.
+
+## Test Cases
+Only include this section when the task is "Generate test cases".
+Provide multiple test cases including edge cases.
+
+Do NOT return a wall of text.
+Always structure the response using headings and bullet points.
 `;
 
     const response = await client.responses.create({
