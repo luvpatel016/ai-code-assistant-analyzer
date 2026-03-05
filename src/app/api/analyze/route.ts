@@ -21,49 +21,81 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json()) as Partial<Body>;
+
     const code = body.code ?? "";
     const language = body.language ?? "Unknown";
     const task = body.task ?? "Analyze";
 
     if (!code.trim()) {
-      return NextResponse.json({ error: "Code is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Code is required." },
+        { status: 400 }
+      );
     }
 
     const prompt = `
-You are a senior software engineer reviewing code.
+You are a senior FAANG software engineer reviewing code.
 
-Respond ONLY in clean Markdown format.
+You MUST return TWO sections in this order:
+
+------------------------------------------------
+
+SECTION 1 — Markdown Review
+
+Provide a clean markdown report with:
+
+## Summary
+Brief explanation of the code.
+
+## Issues
+Bullet list of problems.
+
+## Improvements
+Suggestions for better code.
+
+## Fixed Example (if applicable)
+Provide corrected code if there are bugs.
+
+------------------------------------------------
+
+SECTION 2 — Diagnostics JSON
+
+Return a JSON block exactly like this:
+
+\`\`\`json
+{
+  "diagnostics": [
+    { "line": 3, "message": "Missing semicolon", "severity": "error" }
+  ]
+}
+\`\`\`
+
+Rules:
+
+- "line" must be a real line number
+- severity must be one of:
+  error
+  warning
+  info
+- include **0 to 10 diagnostics**
+- if none exist return:
+
+\`\`\`json
+{
+  "diagnostics": []
+}
+\`\`\`
+
+------------------------------------------------
 
 Task: ${task}
+
 Language: ${language}
 
 Code:
 \`\`\`
 ${code}
 \`\`\`
-
-Return your response using the following sections:
-
-## Summary
-Briefly explain what the code does.
-
-## Issues Found
-- List bugs or problems
-- Mention approximate line numbers if possible
-- If there are no issues, say "No major issues found."
-
-## Fix Suggestions
-- Provide clear bullet point improvements.
-
-## Improved Code
-Provide the corrected or improved version of the code inside ONE fenced code block.
-
-## Test Cases
-Only include this section when the task is "Generate test cases".
-Provide multiple test cases including edge cases.
-
-Do NOT return a wall of text.
-Always structure the response using headings and bullet points.
 `;
 
     const response = await client.responses.create({
@@ -71,9 +103,18 @@ Always structure the response using headings and bullet points.
       input: prompt,
     });
 
-    return NextResponse.json({ result: response.output_text ?? "" });
+    const output = response.output_text ?? "No response generated.";
+
+    return NextResponse.json({
+      result: output,
+    });
+
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    return NextResponse.json(
+      { error: message },
+      { status: 500 }
+    );
   }
 }
