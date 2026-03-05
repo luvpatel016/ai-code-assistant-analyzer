@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import Editor from "@monaco-editor/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const TASKS = [
   "Find bugs and fix suggestions",
@@ -135,18 +137,20 @@ export default function Page() {
 
       <h2 style={{ marginTop: 18, fontSize: 18 }}>Output</h2>
 
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          padding: 12,
-          background: "#000000",
-          color: "white",
-          borderRadius: 10,
-          minHeight: 160,
-        }}
-      >
-        {result || "—"}
-      </pre>
+      <div
+  style={{
+    padding: 16,
+    background: "#0a0a0a",
+    borderRadius: 10,
+    minHeight: 160,
+    border: "1px solid #2a2a2a",
+    lineHeight: 1.6
+  }}
+>
+  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+    {result || "Run the analyzer to see results."}
+  </ReactMarkdown>
+</div>
     </main>
   );
 }
