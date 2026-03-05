@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY. Check your .env.local file." },
+        { error: "Missing OPENAI_API_KEY. Check your .env.local or Vercel env vars." },
         { status: 500 }
       );
     }
@@ -27,27 +27,51 @@ export async function POST(req: Request) {
     const task = body.task ?? "Analyze";
 
     if (!code.trim()) {
+      return NextResponse.json({ error: "Code is required." }, { status: 400 });
+    }
+
+    // Safety: prevent huge pastes from slowing / breaking your app
+    if (code.length > 10000) {
       return NextResponse.json(
-        { error: "Code is required." },
+        { error: "Code is too large. Please paste a smaller snippet (max ~10,000 characters)." },
         { status: 400 }
       );
     }
 
     const prompt = `
-You are a senior software engineer. Return clean, readable Markdown.
+You are a senior FAANG software engineer reviewing code.
+
+You MUST return TWO sections in this order:
+
+------------------------------------------------
+SECTION 1 — Markdown Review
+Return clean, readable GitHub-flavored Markdown using EXACT headings:
+
+## Summary
+(1–3 bullets)
+
+## Issues
+- Bullet list of problems (include approximate line numbers like "Line 4" when possible)
+- If there are no issues, write: "No major issues found."
+
+## Improvements
+- Bullet list of improvements
+
+## Fixed Example (if applicable)
+Only include this section if the task requires fixing/refactoring/optimizing.
+Provide ONE fenced code block with the corrected/refactored full code.
+Use the correct language tag.
 
 FORMAT RULES (mandatory):
-- Use EXACT headings with ##:
-  ## Summary
-  ## Issues
-  ## Fix
-  ## Improvements
-- Put a blank line after every heading.
-- Use bullet points under Issues and Improvements.
-- If there is a fix, include ONE code block under Fix with the corrected code.
-- Keep it short and super readable.
+- Headings MUST start with "## " exactly.
+- There MUST be a blank line after every heading.
+- Bullet points MUST start with "-" exactly.
+- Do NOT return a wall of text.
+- Keep it concise.
 
-Then include diagnostics JSON EXACTLY like this at the end:
+------------------------------------------------
+SECTION 2 — Diagnostics JSON (MUST be LAST)
+Return a JSON block exactly like this:
 
 \`\`\`json
 {
@@ -57,6 +81,19 @@ Then include diagnostics JSON EXACTLY like this at the end:
 }
 \`\`\`
 
+Rules:
+- "line" must be a real 1-based line number from the input.
+- severity MUST be one of: "error", "warning", "info"
+- include 0 to 10 diagnostics
+- if none exist, return:
+
+\`\`\`json
+{
+  "diagnostics": []
+}
+\`\`\`
+
+------------------------------------------------
 Task: ${task}
 Language: ${language}
 
@@ -69,20 +106,14 @@ ${code}
     const response = await client.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
+      max_output_tokens: 600,
     });
 
     const output = response.output_text ?? "No response generated.";
 
-    return NextResponse.json({
-      result: output,
-    });
-
+    return NextResponse.json({ result: output });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Server error";
-
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

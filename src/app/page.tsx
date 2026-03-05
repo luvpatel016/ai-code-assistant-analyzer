@@ -4,8 +4,10 @@ import React, { useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { editor as MonacoEditor } from "monaco-editor";
+import type { editor as MonacoEditorType } from "monaco-editor";
 import type { Monaco } from "@monaco-editor/react";
+
+const LANGUAGES = ["C++", "Java", "Python", "JavaScript", "TypeScript", "C"] as const;
 
 const TASKS = [
   "Find bugs and fix suggestions",
@@ -15,6 +17,7 @@ const TASKS = [
   "Generate test cases",
 ] as const;
 
+type Language = (typeof LANGUAGES)[number];
 type Task = (typeof TASKS)[number];
 
 type Diagnostic = {
@@ -23,51 +26,87 @@ type Diagnostic = {
   severity?: "error" | "warning" | "info";
 };
 
-function splitMarkdownAndDiagnostics(text: string) {
+function stripJsonBlock(raw: string) {
+  // Remove the fenced ```json ... ``` block from the markdown so it doesn't show in Output.
+  return raw.replace(/```json[\s\S]*?```/g, "").trim();
+}
 
-  const match = text.match(/```json([\s\S]*?)```/);
+function safeParseDiagnostics(raw: string): Diagnostic[] {
+  // Looks for:
+  // ```json
+  // { "diagnostics": [ ... ] }
+  // ```
+  const match = raw.match(/```json([\s\S]*?)```/);
+  if (!match) return [];
 
-  let diagnostics: Diagnostic[] = [];
+  try {
+    const parsed = JSON.parse(match[1]);
+    const list = (parsed?.diagnostics ?? []) as unknown;
 
-  if (match) {
-    const json = JSON.parse(match[1]);
-    const diags = json.diagnostics ?? [];
+    if (!Array.isArray(list)) return [];
 
-    diagnostics = diags
-      .map((d: unknown) => {
+    const diags: Diagnostic[] = list
+      .map((d: unknown): Diagnostic | null => {
         if (typeof d !== "object" || d === null) return null;
-
         const rec = d as Record<string, unknown>;
+
         const line = Number(rec.line);
         const message = String(rec.message ?? "Issue");
-        const sevRaw = rec.severity;
 
-        const severity =
+        const sevRaw = rec.severity;
+        const severity: Diagnostic["severity"] =
           sevRaw === "warning" || sevRaw === "info" || sevRaw === "error"
             ? sevRaw
             : "error";
 
         if (!Number.isFinite(line) || line < 1) return null;
 
-        return { line, message, severity } satisfies Diagnostic;
+        return { line, message, severity };
       })
-      .filter((x: Diagnostic | null): x is Diagnostic => x !== null);
-  }
+      .filter((x: Diagnostic | null): x is Diagnostic => x !== null)
+      .slice(0, 10);
 
-  return { markdown: text, diagnostics };
+    return diags;
+  } catch {
+    return [];
+  }
+}
+
+function prettifyMarkdown(raw: string) {
+  let t = raw.trim();
+
+  // Remove any "SECTION 1" type lines if the model outputs them
+  t = t.replace(/^SECTION\s+\d+.*$/gim, "");
+
+  // Normalize common plain headings into markdown headings
+  t = t.replace(/^\s*Summary\s*$/gim, "## Summary");
+  t = t.replace(/^\s*Issues\s*$/gim, "## Issues");
+  t = t.replace(/^\s*Improvements\s*$/gim, "## Improvements");
+  t = t.replace(/^\s*Fix(ed)? Example.*$/gim, "## Fix Example");
+
+  // Convert "Line X:" into bullets
+  t = t.replace(/^(Line\s+\d+:\s+)/gim, "- $1");
+
+  // Collapse extra blank lines
+  t = t.replace(/\n{3,}/g, "\n\n");
+
+  return t.trim();
 }
 
 export default function Page() {
-  const [code, setCode] = useState<string>("");
-  const [language, setLanguage] = useState<string>("C++");
+  const [code, setCode] = useState<string>(
+    `#include <iostream>\nusing namespace std;\n\nint main() {\n  int x = 5;\n  if (x = 10) {\n    cout << "x is 10";\n  }\n  return 0;\n}\n`
+  );
+  const [language, setLanguage] = useState<Language>("C++");
   const [task, setTask] = useState<Task>(TASKS[0]);
+
   const [result, setResult] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
-  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
 
-  const languageToMonaco = useMemo<Record<string, string>>(
+  const languageToMonaco = useMemo<Record<Language, string>>(
     () => ({
       "C++": "cpp",
       C: "c",
@@ -82,21 +121,25 @@ export default function Page() {
   const monacoLanguage = languageToMonaco[language] ?? "plaintext";
 
   function clearMarkers() {
-    if (!editorRef.current || !monacoRef.current) return;
+    const editor = editorRef.current;
     const monaco = monacoRef.current;
-    const model = editorRef.current.getModel();
+    if (!editor || !monaco) return;
+
+    const model = editor.getModel();
     if (!model) return;
+
     monaco.editor.setModelMarkers(model, "ai-review", []);
   }
 
   function applyMarkers(diagnostics: Diagnostic[]) {
-    if (!editorRef.current || !monacoRef.current) return;
-
+    const editor = editorRef.current;
     const monaco = monacoRef.current;
-    const model = editorRef.current.getModel();
+    if (!editor || !monaco) return;
+
+    const model = editor.getModel();
     if (!model) return;
 
-    const markers = diagnostics.map((d) => {
+    const markers = diagnostics.map((d: Diagnostic) => {
       const safeLine = Math.max(1, Math.min(d.line, model.getLineCount()));
       const severity =
         d.severity === "warning"
@@ -117,31 +160,10 @@ export default function Page() {
 
     monaco.editor.setModelMarkers(model, "ai-review", markers);
   }
-function prettifyMarkdown(raw: string) {
-  let t = raw.trim();
-
-  // Normalize common non-markdown headings into markdown headings
-  t = t.replace(/^SECTION 1.*$/gim, "");
-  t = t.replace(/^\s*Summary\s*$/gim, "## Summary");
-  t = t.replace(/^\s*Issues\s*$/gim, "## Issues");
-  t = t.replace(/^\s*Improvements\s*$/gim, "## Improvements");
-  t = t.replace(/^\s*Fix(ed)? Example.*$/gim, "## Fix");
-
-  // Ensure blank line after headings
-  t = t.replace(/^(## .+)\s*$/gim, "$1\n");
-
-  // If lines start with "Line X:" convert to bullets
-  t = t.replace(/^(Line\s+\d+:\s+)/gim, "- $1");
-
-  // Collapse extra blank lines
-  t = t.replace(/\n{3,}/g, "\n\n");
-
-  return t.trim();
-}
 
   async function analyze() {
     setLoading(true);
-    setResult(prettifyMarkdown(""));
+    setResult("");
     clearMarkers();
 
     try {
@@ -153,29 +175,28 @@ function prettifyMarkdown(raw: string) {
 
       const data = (await res.json()) as unknown;
 
-      function getField(obj: unknown, key: string): string | null {
+      const getField = (obj: unknown, key: string): string | null => {
         if (typeof obj !== "object" || obj === null) return null;
-        const record = obj as Record<string, unknown>;
-        const value = record[key];
-        if (value === undefined || value === null) return null;
-        return String(value);
-      }
+        const rec = obj as Record<string, unknown>;
+        const v = rec[key];
+        if (v === undefined || v === null) return null;
+        return String(v);
+      };
 
       if (!res.ok) {
-        const errMsg = getField(data, "error") ?? "Request failed";
-        throw new Error(errMsg);
+        throw new Error(getField(data, "error") ?? "Request failed");
       }
 
-      const okMsg = getField(data, "result") ?? "No result returned.";
+      const raw = getField(data, "result") ?? "No result returned.";
+      const diagnostics = safeParseDiagnostics(raw);
 
-      // If your backend includes a JSON diagnostics block, we parse it.
-      const { markdown, diagnostics } = splitMarkdownAndDiagnostics(okMsg);
+      const markdownOnly = prettifyMarkdown(stripJsonBlock(raw));
+      setResult(markdownOnly || "No output returned.");
 
-      setResult(markdown);
       applyMarkers(diagnostics);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      setResult("Error: " + msg);
+      setResult(`## Error\n\n${msg}`);
     } finally {
       setLoading(false);
     }
@@ -186,35 +207,35 @@ function prettifyMarkdown(raw: string) {
     color: "#fff",
     border: "1px solid #333",
     padding: "8px 10px",
-    borderRadius: 8,
+    borderRadius: 10,
     outline: "none",
   };
 
   return (
     <main
       style={{
-        maxWidth: 900,
+        maxWidth: 980,
         margin: "40px auto",
         padding: 16,
         fontFamily: "system-ui",
         color: "white",
       }}
     >
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 6 }}>
-        AI Code Assistant
+      <h1 style={{ fontSize: 28, fontWeight: 750, marginBottom: 6 }}>
+        AI Code Assistant Analyzer
       </h1>
 
       <p style={{ opacity: 0.8, marginTop: 0 }}>
-        Paste your code, choose a task, and analyze it.
+        Paste code, pick a task, and get an organized review + editor highlights.
       </p>
 
       <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
         <select
           value={language}
-          onChange={(e) => setLanguage(e.target.value)}
+          onChange={(e) => setLanguage(e.target.value as Language)}
           style={controlStyle}
         >
-          {["C++", "Java", "Python", "JavaScript", "TypeScript", "C"].map((lang) => (
+          {LANGUAGES.map((lang) => (
             <option key={lang} value={lang} style={{ color: "#000" }}>
               {lang}
             </option>
@@ -241,7 +262,7 @@ function prettifyMarkdown(raw: string) {
             color: "white",
             border: "none",
             padding: "8px 14px",
-            borderRadius: 8,
+            borderRadius: 10,
             cursor: loading || !code.trim() ? "not-allowed" : "pointer",
             opacity: loading || !code.trim() ? 0.7 : 1,
           }}
@@ -257,7 +278,7 @@ function prettifyMarkdown(raw: string) {
             color: "white",
             border: "1px solid #333",
             padding: "8px 14px",
-            borderRadius: 8,
+            borderRadius: 10,
             cursor: result ? "pointer" : "not-allowed",
             opacity: result ? 1 : 0.6,
           }}
@@ -268,7 +289,7 @@ function prettifyMarkdown(raw: string) {
 
       <div style={{ marginTop: 16 }}>
         <Editor
-          height="320px"
+          height="360px"
           language={monacoLanguage}
           theme="vs-dark"
           value={code}
@@ -288,70 +309,53 @@ function prettifyMarkdown(raw: string) {
 
       <h2 style={{ marginTop: 18, fontSize: 18 }}>Output</h2>
 
-<ReactMarkdown remarkPlugins={[remarkGfm]}>
-  {result || "_"}
-</ReactMarkdown>
-
       <div
         style={{
           padding: 16,
           background: "#0a0a0a",
-          borderRadius: 10,
-          minHeight: 160,
+          borderRadius: 12,
+          minHeight: 180,
           border: "1px solid #2a2a2a",
-          lineHeight: 1.6,
+          lineHeight: 1.65,
         }}
       >
         <ReactMarkdown
-  remarkPlugins={[remarkGfm]}
-  components={{
-    h2: ({ children }) => (
-      <h2 style={{ marginTop: 16, marginBottom: 8, fontSize: 18 }}>
-        {children}
-      </h2>
-    ),
-    ul: ({ children }) => (
-      <ul style={{ paddingLeft: 18, marginTop: 6, marginBottom: 6 }}>
-        {children}
-      </ul>
-    ),
-    li: ({ children }) => (
-      <li style={{ marginBottom: 6 }}>
-        {children}
-      </li>
-    ),
-    p: ({ children }) => (
-      <p style={{ marginTop: 8, marginBottom: 8 }}>
-        {children}
-      </p>
-    ),
-    code: ({ children }) => (
-      <code
-        style={{
-          background: "#111",
-          padding: "2px 6px",
-          borderRadius: 6,
-        }}
-      >
-        {children}
-      </code>
-    ),
-    pre: ({ children }) => (
-      <pre
-        style={{
-          background: "#0b0b0b",
-          padding: 12,
-          borderRadius: 10,
-          overflowX: "auto",
-        }}
-      >
-        {children}
-      </pre>
-    ),
-  }}
->
-  {result || "Run the analyzer to see results."}
-</ReactMarkdown>
+          remarkPlugins={[remarkGfm]}
+          components={{
+            h2: ({ children }) => (
+              <h2 style={{ marginTop: 18, marginBottom: 8, fontSize: 18 }}>
+                {children}
+              </h2>
+            ),
+            ul: ({ children }) => (
+              <ul style={{ paddingLeft: 18, marginTop: 6, marginBottom: 10 }}>
+                {children}
+              </ul>
+            ),
+            li: ({ children }) => <li style={{ marginBottom: 6 }}>{children}</li>,
+            p: ({ children }) => <p style={{ marginTop: 8, marginBottom: 10 }}>{children}</p>,
+            code: ({ children }) => (
+              <code style={{ background: "#111", padding: "2px 6px", borderRadius: 8 }}>
+                {children}
+              </code>
+            ),
+            pre: ({ children }) => (
+              <pre
+                style={{
+                  background: "#0b0b0b",
+                  padding: 12,
+                  borderRadius: 12,
+                  overflowX: "auto",
+                  border: "1px solid #222",
+                }}
+              >
+                {children}
+              </pre>
+            ),
+          }}
+        >
+          {result || "Run the analyzer to see results."}
+        </ReactMarkdown>
       </div>
     </main>
   );
