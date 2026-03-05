@@ -78,9 +78,16 @@ export default function Page() {
 
       <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
         <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-        >
+  value={language}
+  onChange={(e) => setLanguage(e.target.value)}
+  style={{
+    backgroundColor: "#111",
+    color: "#fff",
+    border: "1px solid #333",
+    padding: "6px 10px",
+    borderRadius: "6px"
+  }}
+>
           {["C++", "Java", "Python", "JavaScript", "TypeScript", "C"].map(
             (lang) => (
               <option key={lang} value={lang}>
@@ -101,27 +108,39 @@ export default function Page() {
           ))}
         </select>
 
-        <button
-          onClick={analyze}
-          disabled={loading || !code.trim()}
-        >
-          {loading ? "Analyzing..." : "Analyze"}
-        </button>
+       <button
+  onClick={analyze}
+  disabled={loading || !code.trim()}
+  style={{
+    backgroundColor: "#2563eb",
+    color: "white",
+    border: "none",
+    padding: "8px 14px",
+    borderRadius: "6px",
+    cursor: "pointer"
+  }}
+>
+  {loading ? "Analyzing..." : "Analyze"}
+</button>
       </div>
 
       <textarea
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder="Paste your code here..."
-        rows={14}
-        style={{
-          width: "100%",
-          marginTop: 14,
-          padding: 12,
-          fontFamily: "monospace",
-          fontSize: 14,
-        }}
-      />
+  value={code}
+  onChange={(e) => setCode(e.target.value)}
+  placeholder="Paste your code here..."
+  rows={14}
+  style={{
+    width: "100%",
+    marginTop: 14,
+    padding: 12,
+    fontFamily: "monospace",
+    fontSize: 14,
+    backgroundColor: "#111",
+    color: "#010101",
+    borderRadius: "8px",
+    border: "1px solid #333"
+  }}
+/>
 
       <h2 style={{ marginTop: 18, fontSize: 18 }}>Output</h2>
 
@@ -129,7 +148,7 @@ export default function Page() {
         style={{
           whiteSpace: "pre-wrap",
           padding: 12,
-          background: "#0b0b0b",
+          background: "#000000",
           color: "white",
           borderRadius: 10,
           minHeight: 160,
