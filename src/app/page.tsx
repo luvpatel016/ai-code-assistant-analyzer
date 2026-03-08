@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,7 +21,7 @@ type Language = (typeof LANGUAGES)[number];
 type Task = (typeof TASKS)[number];
 
 type Diagnostic = {
-  line: number; // 1-based
+  line: number;
   message: string;
   severity?: "error" | "warning" | "info";
 };
@@ -70,19 +70,12 @@ function safeParseDiagnostics(raw: string): Diagnostic[] {
 function prettifyMarkdown(raw: string) {
   let t = raw.trim();
 
-  // remove SECTION lines if the model includes them
   t = t.replace(/^SECTION\s+\d+.*$/gim, "").trim();
-
-  // normalize headings if model outputs “Summary” etc.
   t = t.replace(/^\s*Summary\s*$/gim, "## Summary");
   t = t.replace(/^\s*Issues\s*$/gim, "## Issues");
   t = t.replace(/^\s*Improvements\s*$/gim, "## Improvements");
   t = t.replace(/^\s*Fix(ed)? Example.*$/gim, "## Fixed Example");
-
-  // help convert "Line 4:" lines into bullets
   t = t.replace(/^(Line\s+\d+:\s+)/gim, "- $1");
-
-  // reduce spammy blank lines
   t = t.replace(/\n{3,}/g, "\n\n");
 
   return t.trim();
@@ -90,14 +83,25 @@ function prettifyMarkdown(raw: string) {
 
 export default function Page() {
   const [code, setCode] = useState<string>(
-    `#include <iostream>\nusing namespace std;\n\nint main() {\n  int x = 5;\n  if (x = 10) {\n    cout << "x is 10";\n  }\n  return 0;\n}\n`
+    `#include <iostream>
+using namespace std;
+
+int main() {
+  int x = 5;
+  if (x = 10) {
+    cout << "x is 10";
+  }
+  return 0;
+}
+`
   );
+
   const [language, setLanguage] = useState<Language>("C++");
   const [task, setTask] = useState<Task>(TASKS[0]);
-
   const [result, setResult] = useState<string>("");
   const [displayText, setDisplayText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [dots, setDots] = useState<string>("");
 
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
@@ -115,6 +119,20 @@ export default function Page() {
   );
 
   const monacoLanguage = languageToMonaco[language] ?? "plaintext";
+  const lineCount = code.split("\n").length;
+
+  useEffect(() => {
+    if (!loading) {
+      setDots("");
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? "" : prev + "."));
+    }, 400);
+
+    return () => clearInterval(interval);
+  }, [loading]);
 
   function clearMarkers() {
     const editor = editorRef.current;
@@ -188,19 +206,15 @@ export default function Page() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
 
-      // live streaming: update output as we receive chunks
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
         full += chunk;
-
-        // show stream live
         setDisplayText(full);
       }
 
-      // After streaming finishes:
       const diagnostics = safeParseDiagnostics(full);
       applyMarkers(diagnostics);
 
@@ -219,170 +233,284 @@ export default function Page() {
     }
   }
 
+  async function copyOutput() {
+    if (!result) return;
+    await navigator.clipboard.writeText(result);
+  }
+
   const selectStyle: React.CSSProperties = {
-    backgroundColor: "#3a3a3a",
+    backgroundColor: "#374151",
     color: "white",
-    border: "1px solid #555",
-    padding: "8px 10px",
-    borderRadius: 10,
+    border: "1px solid #4b5563",
+    padding: "10px 12px",
+    borderRadius: 12,
     outline: "none",
     cursor: "pointer",
+    fontSize: 14,
+    minWidth: 180,
+  };
+
+  const secondaryButtonStyle: React.CSSProperties = {
+    background: "rgba(17, 24, 39, 0.9)",
+    color: "white",
+    border: "1px solid rgba(255,255,255,0.08)",
+    padding: "10px 14px",
+    borderRadius: 12,
+    cursor: result ? "pointer" : "not-allowed",
+    opacity: result ? 1 : 0.6,
+    fontWeight: 600,
   };
 
   return (
     <main
       style={{
-        maxWidth: 980,
-        margin: "40px auto",
-        padding: 16,
-        fontFamily: "system-ui",
+        minHeight: "100vh",
+        background:
+          "radial-gradient(circle at top, #1f2a44 0%, #0b1020 35%, #050816 70%, #000000 100%)",
+        padding: "36px 16px 60px",
+        fontFamily:
+          'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         color: "white",
       }}
     >
-      {/* Dropdown hover (dark red) */}
       <style jsx>{`
         select:hover {
-          background-color: #7f1d1d !important;
-          border-color: #7f1d1d !important;
+          background-color: #4b5563 !important;
+          border-color: #6b7280 !important;
         }
+
         select:focus {
           outline: none;
-          border-color: #991b1b !important;
-          box-shadow: 0 0 0 2px rgba(153, 27, 27, 0.35);
+          border-color: #60a5fa !important;
+          box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
         }
+
         option {
-          background-color: #3a3a3a;
+          background-color: #374151;
           color: white;
+        }
+
+        .glass-card {
+          background: rgba(10, 15, 30, 0.72);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 0 10px 35px rgba(0, 0, 0, 0.35);
         }
       `}</style>
 
-      <h1 style={{ fontSize: 28, fontWeight: 750, marginBottom: 6 }}>
-        AI Code Assistant Analyzer
-      </h1>
-
-      <p style={{ opacity: 0.8, marginTop: 0 }}>
-        Paste code, pick a task, and get an organized review + editor highlights.
-      </p>
-
-      <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value as Language)}
-          style={selectStyle}
-        >
-          {LANGUAGES.map((lang) => (
-            <option key={lang} value={lang}>
-              {lang}
-            </option>
-          ))}
-        </select>
-
-        <select value={task} onChange={(e) => setTask(e.target.value as Task)} style={selectStyle}>
-          {TASKS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={analyze}
-          disabled={loading || !code.trim()}
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div
+          className="glass-card"
           style={{
-            backgroundColor: "#2563eb",
-            color: "white",
-            border: "none",
-            padding: "8px 14px",
-            borderRadius: 10,
-            cursor: loading || !code.trim() ? "not-allowed" : "pointer",
-            opacity: loading || !code.trim() ? 0.7 : 1,
+            borderRadius: 24,
+            padding: 24,
           }}
         >
-          {loading ? "Analyzing..." : "Analyze"}
-        </button>
+          <h1
+            style={{
+              fontSize: 32,
+              fontWeight: 800,
+              marginBottom: 8,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            AI Code Assistant Analyzer
+          </h1>
 
-        <button
-          onClick={() => navigator.clipboard.writeText(result)}
-          disabled={!result}
-          style={{
-            backgroundColor: "#111",
-            color: "white",
-            border: "1px solid #333",
-            padding: "8px 14px",
-            borderRadius: 10,
-            cursor: result ? "pointer" : "not-allowed",
-            opacity: result ? 1 : 0.6,
-          }}
-        >
-          Copy Output
-        </button>
-      </div>
+          <p
+            style={{
+              opacity: 0.82,
+              marginTop: 0,
+              marginBottom: 10,
+              fontSize: 15,
+            }}
+          >
+            Paste code, choose a task, and get a streamed AI review with markdown output and
+            editor diagnostics.
+          </p>
 
-      <div style={{ marginTop: 16 }}>
-        <Editor
-          height="360px"
-          language={monacoLanguage}
-          theme="vs-dark"
-          value={code}
-          onChange={(value) => setCode(value || "")}
-          onMount={(editor, monaco) => {
-            editorRef.current = editor;
-            monacoRef.current = monaco;
-          }}
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            wordWrap: "on",
-            scrollBeyondLastLine: false,
-          }}
-        />
-      </div>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "rgba(37, 99, 235, 0.12)",
+              border: "1px solid rgba(96, 165, 250, 0.2)",
+              fontSize: 13,
+              color: "#c7d2fe",
+              marginBottom: 20,
+            }}
+          >
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#22c55e",
+                display: "inline-block",
+                boxShadow: "0 0 12px rgba(34,197,94,0.8)",
+              }}
+            />
+            AI Model: GPT-4.1-mini • Streaming Enabled
+          </div>
 
-      <h2 style={{ marginTop: 18, fontSize: 18 }}>Output</h2>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              marginTop: 4,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              style={selectStyle}
+            >
+              {LANGUAGES.map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+            </select>
 
-      <div
-        style={{
-          padding: 16,
-          background: "#0a0a0a",
-          borderRadius: 12,
-          minHeight: 180,
-          border: "1px solid #2a2a2a",
-          lineHeight: 1.65,
-        }}
-      >
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            h2: ({ children }) => (
-              <h2 style={{ marginTop: 18, marginBottom: 8, fontSize: 18 }}>{children}</h2>
-            ),
-            ul: ({ children }) => (
-              <ul style={{ paddingLeft: 18, marginTop: 6, marginBottom: 10 }}>{children}</ul>
-            ),
-            li: ({ children }) => <li style={{ marginBottom: 6 }}>{children}</li>,
-            p: ({ children }) => <p style={{ marginTop: 8, marginBottom: 10 }}>{children}</p>,
-            code: ({ children }) => (
-              <code style={{ background: "#111", padding: "2px 6px", borderRadius: 8 }}>
-                {children}
-              </code>
-            ),
-            pre: ({ children }) => (
-              <pre
-                style={{
-                  background: "#0b0b0b",
-                  padding: 12,
-                  borderRadius: 12,
-                  overflowX: "auto",
-                  border: "1px solid #222",
-                }}
-              >
-                {children}
-              </pre>
-            ),
-          }}
-        >
-          {displayText || (loading ? "Generating..." : "Run the analyzer to see results.")}
-        </ReactMarkdown>
+            <select
+              value={task}
+              onChange={(e) => setTask(e.target.value as Task)}
+              style={selectStyle}
+            >
+              {TASKS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={analyze}
+              disabled={loading || !code.trim()}
+              style={{
+                background: "linear-gradient(90deg, #2563eb, #4f46e5)",
+                color: "white",
+                border: "none",
+                padding: "10px 16px",
+                borderRadius: 12,
+                cursor: loading || !code.trim() ? "not-allowed" : "pointer",
+                opacity: loading || !code.trim() ? 0.72 : 1,
+                fontWeight: 700,
+                boxShadow: "0 0 24px rgba(79,70,229,0.35)",
+              }}
+            >
+              {loading ? `Analyzing${dots}` : "Analyze"}
+            </button>
+
+            <button onClick={copyOutput} disabled={!result} style={secondaryButtonStyle}>
+              Copy Output
+            </button>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <Editor
+              height="420px"
+              language={monacoLanguage}
+              theme="vs-dark"
+              value={code}
+              onChange={(value) => setCode(value || "")}
+              onMount={(editor, monaco) => {
+                editorRef.current = editor;
+                monacoRef.current = monaco;
+              }}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                wordWrap: "on",
+                scrollBeyondLastLine: false,
+                padding: { top: 14, bottom: 14 },
+                smoothScrolling: true,
+                cursorBlinking: "smooth",
+                roundedSelection: true,
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              opacity: 0.62,
+              fontSize: 12,
+            }}
+          >
+            {lineCount} lines • {language} • {task}
+          </div>
+
+          <h2 style={{ marginTop: 24, fontSize: 19, fontWeight: 700 }}>Output</h2>
+
+          <div
+            style={{
+              padding: 18,
+              background: "rgba(3, 7, 18, 0.9)",
+              borderRadius: 16,
+              minHeight: 220,
+              border: "1px solid rgba(255,255,255,0.08)",
+              lineHeight: 1.7,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+            }}
+          >
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h2: ({ children }) => (
+                  <h2
+                    style={{
+                      marginTop: 18,
+                      marginBottom: 8,
+                      fontSize: 19,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {children}
+                  </h2>
+                ),
+                ul: ({ children }) => (
+                  <ul style={{ paddingLeft: 20, marginTop: 8, marginBottom: 12 }}>{children}</ul>
+                ),
+                li: ({ children }) => <li style={{ marginBottom: 6 }}>{children}</li>,
+                p: ({ children }) => <p style={{ marginTop: 8, marginBottom: 10 }}>{children}</p>,
+                code: ({ children }) => (
+                  <code
+                    style={{
+                      background: "#111827",
+                      padding: "2px 6px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    {children}
+                  </code>
+                ),
+                pre: ({ children }) => (
+                  <pre
+                    style={{
+                      background: "#020617",
+                      padding: 14,
+                      borderRadius: 14,
+                      overflowX: "auto",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    {children}
+                  </pre>
+                ),
+              }}
+            >
+              {displayText || (loading ? `Analyzing${dots}` : "Run the analyzer to see results.")}
+            </ReactMarkdown>
+          </div>
+        </div>
       </div>
     </main>
   );

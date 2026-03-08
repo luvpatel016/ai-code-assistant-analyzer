@@ -9,6 +9,7 @@ type Body = {
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
+
     if (!apiKey) {
       return NextResponse.json(
         { error: "Missing OPENAI_API_KEY. Set it in .env.local and Vercel env vars." },
@@ -35,35 +36,38 @@ export async function POST(req: Request) {
     const prompt = `
 You are a senior FAANG software engineer reviewing code.
 
-You MUST return TWO sections in this order:
+You MUST return TWO sections in this exact order.
 
 ------------------------------------------------
 SECTION 1 — Markdown Review
+
 Return clean, readable GitHub-flavored Markdown using EXACT headings:
 
 ## Summary
 (1–3 bullets)
 
 ## Issues
-- Bullet list of problems (include approximate line numbers like "Line 4" when possible)
-- If there are no issues, write: "No major issues found."
+- Bullet list of problems
+- Include approximate line numbers like "Line 4" when possible
+- If there are no issues, write exactly: "No major issues found."
 
 ## Improvements
 - Bullet list of improvements
 
 ## Fixed Example (if applicable)
-Only include this section if the task requires fixing/refactoring/optimizing.
-Provide ONE fenced code block with the corrected/refactored full code.
+Only include this section if the task requires fixing, refactoring, or optimizing.
+Provide ONE fenced code block with the corrected or refactored full code.
 Use the correct language tag.
 
-FORMAT RULES (mandatory):
-- Headings MUST start with "## " exactly.
-- There MUST be a blank line after every heading.
-- Bullet points MUST start with "-" exactly.
-- Keep it concise.
+FORMAT RULES:
+- Headings MUST start with "## " exactly
+- There MUST be a blank line after every heading
+- Bullet points MUST start with "-" exactly
+- Keep it concise and professional
 
 ------------------------------------------------
 SECTION 2 — Diagnostics JSON (MUST be LAST)
+
 Return a JSON block exactly like this:
 
 \`\`\`json
@@ -75,10 +79,10 @@ Return a JSON block exactly like this:
 \`\`\`
 
 Rules:
-- "line" must be a real 1-based line number from the input.
+- "line" must be a real 1-based line number from the input
 - severity MUST be one of: "error", "warning", "info"
 - include 0 to 10 diagnostics
-- if none exist, return:
+- if none exist, return exactly:
 
 \`\`\`json
 {
@@ -91,12 +95,11 @@ Task: ${task}
 Language: ${language}
 
 Code:
-\`\`\`
+\`\`\`${language.toLowerCase()}
 ${code}
 \`\`\`
 `.trim();
 
-    // OpenAI Responses API (SSE stream)
     const upstream = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -107,7 +110,7 @@ ${code}
         model: "gpt-4.1-mini",
         input: prompt,
         stream: true,
-        max_output_tokens: 900,
+        max_output_tokens: 1000,
       }),
     });
 
@@ -122,7 +125,6 @@ ${code}
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
 
-    // Convert OpenAI SSE -> plain text stream (only output_text deltas)
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const reader = upstream.body!.getReader();
@@ -135,12 +137,12 @@ ${code}
 
             buffer += decoder.decode(value, { stream: true });
 
-            // SSE events separated by blank line
             const parts = buffer.split("\n\n");
             buffer = parts.pop() ?? "";
 
             for (const part of parts) {
               const lines = part.split("\n");
+
               for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed.startsWith("data:")) continue;
@@ -164,7 +166,7 @@ ${code}
             }
           }
         } catch {
-          // client disconnected, just close
+          // client disconnected
         } finally {
           controller.close();
           try {
