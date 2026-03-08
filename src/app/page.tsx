@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Editor from "@monaco-editor/react";
+import Editor, { DiffEditor } from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { editor as MonacoEditorType } from "monaco-editor";
@@ -81,6 +81,20 @@ function prettifyMarkdown(raw: string) {
   return t.trim();
 }
 
+function extractFixedCode(raw: string) {
+  const fixedSectionMatch = raw.match(/## Fixed Example[\s\S]*?```[a-zA-Z0-9+#-]*\n([\s\S]*?)```/i);
+  if (fixedSectionMatch?.[1]) {
+    return fixedSectionMatch[1].trim();
+  }
+
+  const anyCodeBlockMatch = raw.match(/```[a-zA-Z0-9+#-]*\n([\s\S]*?)```/);
+  if (anyCodeBlockMatch?.[1]) {
+    return anyCodeBlockMatch[1].trim();
+  }
+
+  return "";
+}
+
 export default function Page() {
   const [code, setCode] = useState<string>(
     `#include <iostream>
@@ -100,6 +114,7 @@ int main() {
   const [task, setTask] = useState<Task>(TASKS[0]);
   const [result, setResult] = useState<string>("");
   const [displayText, setDisplayText] = useState<string>("");
+  const [fixedCode, setFixedCode] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [dots, setDots] = useState<string>("");
 
@@ -179,6 +194,7 @@ int main() {
     setLoading(true);
     setResult("");
     setDisplayText("");
+    setFixedCode("");
     clearMarkers();
 
     let full = "";
@@ -220,14 +236,17 @@ int main() {
 
       const cleaned = prettifyMarkdown(stripJsonBlock(full));
       const finalText = cleaned || "No output returned.";
+      const extractedFixedCode = extractFixedCode(finalText);
 
       setResult(finalText);
       setDisplayText(finalText);
+      setFixedCode(extractedFixedCode);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       const finalText = `## Error\n\n${msg}`;
       setResult(finalText);
       setDisplayText(finalText);
+      setFixedCode("");
     } finally {
       setLoading(false);
     }
@@ -236,6 +255,16 @@ int main() {
   async function copyOutput() {
     if (!result) return;
     await navigator.clipboard.writeText(result);
+  }
+
+  async function copyFixedCode() {
+    if (!fixedCode) return;
+    await navigator.clipboard.writeText(fixedCode);
+  }
+
+  function applyFixToEditor() {
+    if (!fixedCode) return;
+    setCode(fixedCode);
   }
 
   const selectStyle: React.CSSProperties = {
@@ -256,8 +285,8 @@ int main() {
     border: "1px solid rgba(255,255,255,0.08)",
     padding: "10px 14px",
     borderRadius: 12,
-    cursor: result ? "pointer" : "not-allowed",
-    opacity: result ? 1 : 0.6,
+    cursor: "pointer",
+    opacity: 1,
     fontWeight: 600,
   };
 
@@ -299,7 +328,7 @@ int main() {
         }
       `}</style>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1150, margin: "0 auto" }}>
         <div
           className="glass-card"
           style={{
@@ -326,8 +355,8 @@ int main() {
               fontSize: 15,
             }}
           >
-            Paste code, choose a task, and get a streamed AI review with markdown output and
-            editor diagnostics.
+            Paste code, choose a task, and get a streamed AI review with markdown output,
+            inline diagnostics, and side-by-side fix comparison.
           </p>
 
           <div
@@ -354,7 +383,7 @@ int main() {
                 boxShadow: "0 0 12px rgba(34,197,94,0.8)",
               }}
             />
-            AI Model: GPT-4.1-mini • Streaming Enabled
+            AI Model: GPT-4.1-mini • Streaming Enabled • Diff View Ready
           </div>
 
           <div
@@ -510,6 +539,86 @@ int main() {
               {displayText || (loading ? `Analyzing${dots}` : "Run the analyzer to see results.")}
             </ReactMarkdown>
           </div>
+
+          {fixedCode && (
+            <>
+              <div
+                style={{
+                  marginTop: 28,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                }}
+              >
+                <h2 style={{ fontSize: 19, fontWeight: 700, margin: 0 }}>
+                  Suggested Fix Diff View
+                </h2>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button onClick={copyFixedCode} style={secondaryButtonStyle}>
+                    Copy Fixed Code
+                  </button>
+
+                  <button
+                    onClick={applyFixToEditor}
+                    style={{
+                      background: "linear-gradient(90deg, #059669, #10b981)",
+                      color: "white",
+                      border: "none",
+                      padding: "10px 14px",
+                      borderRadius: 12,
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      boxShadow: "0 0 20px rgba(16,185,129,0.25)",
+                    }}
+                  >
+                    Apply Fix to Editor
+                  </button>
+                </div>
+              </div>
+
+              <p
+                style={{
+                  marginTop: 8,
+                  opacity: 0.72,
+                  fontSize: 14,
+                }}
+              >
+                Compare your original code against the AI-suggested improved version.
+              </p>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "#020617",
+                }}
+              >
+                <DiffEditor
+                  height="420px"
+                  theme="vs-dark"
+                  language={monacoLanguage}
+                  original={code}
+                  modified={fixedCode}
+                  options={{
+                    readOnly: true,
+                    renderSideBySide: true,
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    wordWrap: "on",
+                    scrollBeyondLastLine: false,
+                    renderOverviewRuler: true,
+                    diffWordWrap: "on",
+                    automaticLayout: true,
+                  }}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </main>
