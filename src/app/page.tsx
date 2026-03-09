@@ -26,6 +26,11 @@ type Diagnostic = {
   severity?: "error" | "warning" | "info";
 };
 
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 function stripJsonBlock(raw: string) {
   return raw.replace(/```json[\s\S]*?```/g, "").trim();
 }
@@ -118,6 +123,10 @@ int main() {
   const [loading, setLoading] = useState<boolean>(false);
   const [dots, setDots] = useState<string>("");
 
+  const [chatInput, setChatInput] = useState<string>("");
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState<boolean>(false);
+
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
 
@@ -174,8 +183,8 @@ int main() {
         d.severity === "warning"
           ? monaco.MarkerSeverity.Warning
           : d.severity === "info"
-          ? monaco.MarkerSeverity.Info
-          : monaco.MarkerSeverity.Error;
+            ? monaco.MarkerSeverity.Info
+            : monaco.MarkerSeverity.Error;
 
       return {
         startLineNumber: safeLine,
@@ -188,6 +197,24 @@ int main() {
     });
 
     monaco.editor.setModelMarkers(model, "ai-review", markers);
+  }
+
+  async function readStreamAsText(res: Response) {
+    if (!res.body) {
+      throw new Error("No response body (stream missing).");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      full += decoder.decode(value, { stream: true });
+    }
+
+    return full;
   }
 
   async function analyze() {
@@ -265,6 +292,65 @@ int main() {
   function applyFixToEditor() {
     if (!fixedCode) return;
     setCode(fixedCode);
+  }
+
+  async function askAI() {
+    const question = chatInput.trim();
+    if (!question || chatLoading) return;
+
+    setChatHistory((prev) => [...prev, { role: "user", content: question }]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const chatTask = `
+Answer the user's question about the code.
+
+User question:
+${question}
+
+Instructions:
+- Answer clearly and directly.
+- Focus on the user's exact question.
+- You may reference the current code and the prior review.
+- If the user asks for a fix, include a corrected example when helpful.
+- Respect the user's coding style preferences when possible.
+- Do not mention SECTION 1 or SECTION 2.
+- You may still include diagnostics JSON at the end if relevant.
+      `.trim();
+
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          language,
+          task: chatTask,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as unknown));
+        const msg =
+          typeof err === "object" && err !== null && "error" in err
+            ? String((err as Record<string, unknown>).error ?? "Request failed")
+            : `Request failed (${res.status})`;
+        throw new Error(msg);
+      }
+
+      const full = await readStreamAsText(res);
+      const cleaned = prettifyMarkdown(stripJsonBlock(full)) || "No answer returned.";
+
+      setChatHistory((prev) => [...prev, { role: "assistant", content: cleaned }]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setChatHistory((prev) => [
+        ...prev,
+        { role: "assistant", content: `## Error\n\n${msg}` },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
   }
 
   const selectStyle: React.CSSProperties = {
@@ -356,7 +442,7 @@ int main() {
             }}
           >
             Paste code, choose a task, and get a streamed AI review with markdown output,
-            inline diagnostics, and side-by-side fix comparison.
+            inline diagnostics, side-by-side fix comparison, and follow-up AI chat.
           </p>
 
           <div
@@ -383,7 +469,7 @@ int main() {
                 boxShadow: "0 0 12px rgba(34,197,94,0.8)",
               }}
             />
-            AI Model: GPT-4.1-mini • Streaming Enabled • Diff View Ready
+            AI Model: GPT-4.1-mini • Streaming Enabled • Diff View Ready • Chat Enabled
           </div>
 
           <div
@@ -619,6 +705,191 @@ int main() {
               </div>
             </>
           )}
+
+          <div style={{ marginTop: 32 }}>
+            <h2 style={{ fontSize: 19, fontWeight: 700, marginBottom: 10 }}>
+              Ask AI About This Code
+            </h2>
+
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: 12,
+                opacity: 0.72,
+                fontSize: 14,
+              }}
+            >
+              Ask follow-up questions about the code, the bugs, the fixes, or why something works.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                alignItems: "stretch",
+              }}
+            >
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void askAI();
+                  }
+                }}
+                placeholder="Ask anything about this code..."
+                style={{
+                  flex: 1,
+                  minWidth: 260,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "#0f172a",
+                  color: "white",
+                  outline: "none",
+                  fontSize: 14,
+                }}
+              />
+
+              <button
+                onClick={() => void askAI()}
+                disabled={chatLoading || !chatInput.trim()}
+                style={{
+                  background: "linear-gradient(90deg, #2563eb, #3b82f6)",
+                  color: "white",
+                  border: "none",
+                  padding: "12px 16px",
+                  borderRadius: 12,
+                  cursor: chatLoading || !chatInput.trim() ? "not-allowed" : "pointer",
+                  opacity: chatLoading || !chatInput.trim() ? 0.72 : 1,
+                  fontWeight: 700,
+                  minWidth: 110,
+                }}
+              >
+                {chatLoading ? "Thinking..." : "Ask AI"}
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: 18,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {chatHistory.length === 0 ? (
+                <div
+                  style={{
+                    padding: 16,
+                    borderRadius: 14,
+                    background: "rgba(3, 7, 18, 0.75)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    opacity: 0.7,
+                    fontSize: 14,
+                  }}
+                >
+                  No questions yet. Try asking something like:
+                  <div style={{ marginTop: 8 }}>
+                    • Why is line 5 wrong?
+                    <br />
+                    • Can you explain this code simply?
+                    <br />
+                    • Keep using namespace std; and fix only the bug
+                  </div>
+                </div>
+              ) : (
+                chatHistory.map((msg, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      padding: 16,
+                      borderRadius: 14,
+                      background:
+                        msg.role === "user"
+                          ? "rgba(37, 99, 235, 0.14)"
+                          : "rgba(3, 7, 18, 0.85)",
+                      border:
+                        msg.role === "user"
+                          ? "1px solid rgba(96, 165, 250, 0.22)"
+                          : "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        letterSpacing: "0.03em",
+                        textTransform: "uppercase",
+                        opacity: 0.7,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {msg.role === "user" ? "You" : "AI"}
+                    </div>
+
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h2: ({ children }) => (
+                          <h2
+                            style={{
+                              marginTop: 14,
+                              marginBottom: 8,
+                              fontSize: 18,
+                              fontWeight: 800,
+                            }}
+                          >
+                            {children}
+                          </h2>
+                        ),
+                        ul: ({ children }) => (
+                          <ul style={{ paddingLeft: 20, marginTop: 8, marginBottom: 12 }}>
+                            {children}
+                          </ul>
+                        ),
+                        li: ({ children }) => <li style={{ marginBottom: 6 }}>{children}</li>,
+                        p: ({ children }) => (
+                          <p style={{ marginTop: 8, marginBottom: 10, lineHeight: 1.7 }}>
+                            {children}
+                          </p>
+                        ),
+                        code: ({ children }) => (
+                          <code
+                            style={{
+                              background: "#111827",
+                              padding: "2px 6px",
+                              borderRadius: 8,
+                              border: "1px solid rgba(255,255,255,0.08)",
+                            }}
+                          >
+                            {children}
+                          </code>
+                        ),
+                        pre: ({ children }) => (
+                          <pre
+                            style={{
+                              background: "#020617",
+                              padding: 14,
+                              borderRadius: 14,
+                              overflowX: "auto",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                            }}
+                          >
+                            {children}
+                          </pre>
+                        ),
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </main>

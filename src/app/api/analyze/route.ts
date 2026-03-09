@@ -34,7 +34,21 @@ export async function POST(req: Request) {
     }
 
     const prompt = `
-You are a senior FAANG software engineer reviewing code.
+You are a senior FAANG software engineer reviewing code and answering code questions.
+
+IMPORTANT CODE STYLE RULES:
+- Respect the user's coding style when possible.
+- If the user uses \`using namespace std;\`, keep it unless it causes a real correctness, safety, or compilation issue.
+- Do NOT rewrite the whole program just to match your own preferences.
+- Prefer minimal edits.
+- Keep the user's naming style, structure, and formatting when reasonable.
+- Only change style when it is necessary for correctness, safety, clarity, or performance.
+
+IMPORTANT RESPONSE RULES:
+- Always be clear, direct, and helpful.
+- If the task is asking a question about the code, answer the question directly first.
+- If the task asks for a fix, refactor, or optimization, include a fixed example when appropriate.
+- Approximate line numbers are helpful when possible.
 
 You MUST return TWO sections in this exact order.
 
@@ -55,7 +69,7 @@ Return clean, readable GitHub-flavored Markdown using EXACT headings:
 - Bullet list of improvements
 
 ## Fixed Example (if applicable)
-Only include this section if the task requires fixing, refactoring, or optimizing.
+Only include this section if the task requires fixing, refactoring, optimizing, or giving a corrected version.
 Provide ONE fenced code block with the corrected or refactored full code.
 Use the correct language tag.
 
@@ -110,7 +124,7 @@ ${code}
         model: "gpt-4.1-mini",
         input: prompt,
         stream: true,
-        max_output_tokens: 1000,
+        max_output_tokens: 1100,
       }),
     });
 
@@ -160,13 +174,13 @@ ${code}
                     controller.enqueue(encoder.encode(rec.delta));
                   }
                 } catch {
-                  // ignore malformed chunks
+                  // Ignore malformed chunks
                 }
               }
             }
           }
         } catch {
-          // client disconnected
+          // Client disconnected or stream closed unexpectedly
         } finally {
           controller.close();
           try {
