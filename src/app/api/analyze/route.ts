@@ -1,10 +1,54 @@
 import { NextResponse } from "next/server";
 
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 type Body = {
   code: string;
   language: string;
   task: string;
+  chatHistory?: ChatMessage[];
 };
+
+function buildDirectMarkdownResponse(message: string) {
+  return `## Summary
+
+- ${message}
+
+## Issues
+
+- No major issues found.
+
+## Improvements
+
+- Ask another question about the code or Debug AI.
+
+\`\`\`json
+{
+  "diagnostics": []
+}
+\`\`\``;
+}
+
+function isCreatorQuestion(text: string) {
+  const normalized = text.toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+  const phrases = [
+    "who created you",
+    "who made you",
+    "whos your creator",
+    "who is your creator",
+    "who created debug ai",
+    "who made debug ai",
+    "who built you",
+    "who built debug ai",
+    "who is your maker",
+  ];
+
+  return phrases.some((phrase) => normalized.includes(phrase));
+}
 
 export async function POST(req: Request) {
   try {
@@ -21,6 +65,24 @@ export async function POST(req: Request) {
     const code = body.code ?? "";
     const language = body.language ?? "Unknown";
     const task = body.task ?? "Analyze";
+    const chatHistory = Array.isArray(body.chatHistory) ? body.chatHistory.slice(-12) : [];
+
+    const latestUserMessage =
+      [...chatHistory].reverse().find((msg) => msg.role === "user")?.content ?? "";
+
+    const creatorCheckText = `${task}\n${latestUserMessage}`;
+
+    if (isCreatorQuestion(creatorCheckText)) {
+      return new NextResponse(
+        buildDirectMarkdownResponse("My creator is Luv Patel, the creator of Debug AI."),
+        {
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+          },
+        }
+      );
+    }
 
     if (!code.trim()) {
       return NextResponse.json({ error: "Code is required." }, { status: 400 });
@@ -33,8 +95,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const conversationContext =
+      chatHistory.length > 0
+        ? chatHistory
+            .map((msg, index) => `${index + 1}. ${msg.role.toUpperCase()}: ${msg.content}`)
+            .join("\n\n")
+        : "No previous conversation.";
+
     const prompt = `
-You are a senior FAANG software engineer reviewing code and answering code questions.
+You are Debug AI, an AI coding assistant for reviewing code and answering code questions.
+
+IDENTITY RULE:
+- If the user asks who created you, who made you, who your creator is, or anything with the same meaning, respond with exactly:
+My creator is Luv Patel, the creator of Debug AI.
 
 IMPORTANT CODE STYLE RULES:
 - Respect the user's coding style when possible.
@@ -45,7 +118,8 @@ IMPORTANT CODE STYLE RULES:
 - Only change style when it is necessary for correctness, safety, clarity, or performance.
 
 IMPORTANT RESPONSE RULES:
-- Always be clear, direct, and helpful.
+- Use the past conversation context when helpful.
+- Answer clearly, directly, and helpfully.
 - If the task is asking a question about the code, answer the question directly first.
 - If the task asks for a fix, refactor, or optimization, include a fixed example when appropriate.
 - Approximate line numbers are helpful when possible.
@@ -105,8 +179,14 @@ Rules:
 \`\`\`
 
 ------------------------------------------------
-Task: ${task}
-Language: ${language}
+Task:
+${task}
+
+Language:
+${language}
+
+Previous conversation:
+${conversationContext}
 
 Code:
 \`\`\`${language.toLowerCase()}
@@ -124,7 +204,7 @@ ${code}
         model: "gpt-4.1-mini",
         input: prompt,
         stream: true,
-        max_output_tokens: 1100,
+        max_output_tokens: 1200,
       }),
     });
 

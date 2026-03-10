@@ -100,6 +100,236 @@ function extractFixedCode(raw: string) {
   return "";
 }
 
+function RobotAssistant({ loading }: { loading: boolean }) {
+  return (
+    <div
+      style={{
+        position: "sticky",
+        top: 24,
+        alignSelf: "start",
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(8, 14, 30, 0.82)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 24,
+          padding: 18,
+          boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: 18,
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: 120,
+              height: 150,
+              animation: "robotFloat 2.6s ease-in-out infinite",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                background: "#60a5fa",
+                boxShadow: "0 0 14px rgba(96,165,250,0.8)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: 12,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 4,
+                height: 18,
+                background: "#64748b",
+                borderRadius: 999,
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: 28,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 84,
+                height: 64,
+                borderRadius: 20,
+                background: "linear-gradient(180deg, #1e293b, #0f172a)",
+                border: "2px solid rgba(96,165,250,0.35)",
+                boxShadow: "0 0 24px rgba(59,130,246,0.18)",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: 22,
+                  left: 18,
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  background: "#38bdf8",
+                  boxShadow: loading
+                    ? "0 0 12px rgba(56,189,248,1)"
+                    : "0 0 10px rgba(56,189,248,0.8)",
+                  animation: loading ? "robotBlink 0.8s ease-in-out infinite" : "none",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 22,
+                  right: 18,
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  background: "#38bdf8",
+                  boxShadow: loading
+                    ? "0 0 12px rgba(56,189,248,1)"
+                    : "0 0 10px rgba(56,189,248,0.8)",
+                  animation: loading ? "robotBlink 0.8s ease-in-out infinite 0.2s" : "none",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 12,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: 28,
+                  height: 4,
+                  borderRadius: 999,
+                  background: "#93c5fd",
+                  opacity: 0.9,
+                }}
+              />
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                top: 96,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 68,
+                height: 40,
+                borderRadius: 18,
+                background: "linear-gradient(180deg, #172554, #0f172a)",
+                border: "2px solid rgba(96,165,250,0.22)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: 98,
+                left: 14,
+                width: 18,
+                height: 42,
+                borderRadius: 999,
+                background: "#1e293b",
+                transform: "rotate(22deg)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: 98,
+                right: 14,
+                width: 18,
+                height: 42,
+                borderRadius: 999,
+                background: "#1e293b",
+                transform: "rotate(-22deg)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 38,
+                width: 14,
+                height: 34,
+                borderRadius: 999,
+                background: "#1e293b",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 38,
+                width: 14,
+                height: 34,
+                borderRadius: 999,
+                background: "#1e293b",
+              }}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(15, 23, 42, 0.95)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 18,
+            padding: "14px 16px",
+            color: "white",
+            fontSize: 14,
+            lineHeight: 1.6,
+            boxShadow: "0 10px 25px rgba(0,0,0,0.22)",
+          }}
+        >
+          <div style={{ fontWeight: 800, marginBottom: 6, color: "#bfdbfe" }}>Debug AI</div>
+          <div>
+            {loading ? "I’m analyzing your code right now..." : "Hey, I’m here to help."}
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 14,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              background: "rgba(15, 23, 42, 0.82)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 16,
+              padding: 12,
+              fontSize: 13,
+              color: "#cbd5e1",
+            }}
+          >
+            Ask me things like:
+            <div style={{ marginTop: 8, lineHeight: 1.7 }}>
+              • Why is this line wrong?
+              <br />
+              • Fix only the bug
+              <br />
+              • Keep my coding style
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Page() {
   const [code, setCode] = useState<string>(
     `#include <iostream>
@@ -438,9 +668,51 @@ My creator is Luv Patel, the creator of Debug AI.
           border: 1px solid rgba(255, 255, 255, 0.08);
           box-shadow: 0 10px 35px rgba(0, 0, 0, 0.35);
         }
+
+        @keyframes robotFloat {
+          0%,
+          100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-8px);
+          }
+        }
+
+        @keyframes robotBlink {
+          0%,
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(0.8);
+            opacity: 0.7;
+          }
+        }
+
+        @media (max-width: 1024px) {
+          .debug-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .debug-robot-panel {
+            order: -1;
+          }
+        }
       `}</style>
 
-      <div style={{ maxWidth: 1150, margin: "0 auto" }}>
+      <div
+        className="debug-layout"
+        style={{
+          maxWidth: 1420,
+          margin: "0 auto",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) 320px",
+          gap: 22,
+          alignItems: "start",
+        }}
+      >
         <div
           className="glass-card"
           style={{
@@ -948,6 +1220,10 @@ My creator is Luv Patel, the creator of Debug AI.
               <div ref={chatEndRef} />
             </div>
           </div>
+        </div>
+
+        <div className="debug-robot-panel">
+          <RobotAssistant loading={loading || chatLoading} />
         </div>
       </div>
     </main>
