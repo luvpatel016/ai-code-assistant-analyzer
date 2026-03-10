@@ -129,8 +129,9 @@ int main() {
 
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
   const chatSectionRef = useRef<HTMLDivElement | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const languageToMonaco = useMemo<Record<Language, string>>(
     () => ({
@@ -161,8 +162,19 @@ int main() {
   }, [loading]);
 
   useEffect(() => {
-    if (!chatEndRef.current) return;
-    chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    const container = chatContainerRef.current;
+
+    if (container) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
   }, [chatHistory, chatLoading]);
 
   function clearMarkers() {
@@ -310,7 +322,13 @@ int main() {
     setChatInput("");
     setChatLoading(true);
 
-    chatSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    requestAnimationFrame(() => {
+      chatSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      chatContainerRef.current?.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    });
 
     try {
       const chatTask = `
@@ -781,6 +799,7 @@ My creator is Luv Patel, the creator of Debug AI.
             </div>
 
             <div
+              ref={chatContainerRef}
               style={{
                 marginTop: 18,
                 display: "flex",
@@ -789,6 +808,7 @@ My creator is Luv Patel, the creator of Debug AI.
                 maxHeight: 520,
                 overflowY: "auto",
                 paddingRight: 4,
+                scrollBehavior: "smooth",
               }}
             >
               {chatHistory.length === 0 ? (
