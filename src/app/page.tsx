@@ -129,6 +129,8 @@ int main() {
 
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatSectionRef = useRef<HTMLDivElement | null>(null);
 
   const languageToMonaco = useMemo<Record<Language, string>>(
     () => ({
@@ -157,6 +159,11 @@ int main() {
 
     return () => clearInterval(interval);
   }, [loading]);
+
+  useEffect(() => {
+    if (!chatEndRef.current) return;
+    chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [chatHistory, chatLoading]);
 
   function clearMarkers() {
     const editor = editorRef.current;
@@ -298,25 +305,25 @@ int main() {
     const question = chatInput.trim();
     if (!question || chatLoading) return;
 
-    setChatHistory((prev) => [...prev, { role: "user", content: question }]);
+    const nextHistory = [...chatHistory, { role: "user" as const, content: question }];
+    setChatHistory(nextHistory);
     setChatInput("");
     setChatLoading(true);
 
+    chatSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
     try {
       const chatTask = `
-Answer the user's question about the code.
-
-User question:
-${question}
+Answer the user's question about the code and the ongoing conversation.
 
 Instructions:
 - Answer clearly and directly.
-- Focus on the user's exact question.
-- You may reference the current code and the prior review.
-- If the user asks for a fix, include a corrected example when helpful.
+- Use the prior conversation for context when useful.
 - Respect the user's coding style preferences when possible.
+- If asked "who created you" or anything meaning the same thing, respond with exactly:
+My creator is Luv Patel, the creator of Debug AI.
+- If the user asks for a fix, include a corrected example when helpful.
 - Do not mention SECTION 1 or SECTION 2.
-- You may still include diagnostics JSON at the end if relevant.
       `.trim();
 
       const res = await fetch("/api/analyze", {
@@ -326,6 +333,7 @@ Instructions:
           code,
           language,
           task: chatTask,
+          chatHistory: nextHistory,
         }),
       });
 
@@ -430,7 +438,7 @@ Instructions:
               letterSpacing: "-0.02em",
             }}
           >
-            AI Code Assistant Analyzer
+            Debug AI
           </h1>
 
           <p
@@ -469,7 +477,7 @@ Instructions:
                 boxShadow: "0 0 12px rgba(34,197,94,0.8)",
               }}
             />
-            AI Model: GPT-4.1-mini • Streaming Enabled • Diff View Ready • Chat Enabled
+            Debug AI • GPT-4.1-mini • Streaming Enabled • Diff View Ready • Chat Enabled
           </div>
 
           <div
@@ -706,9 +714,9 @@ Instructions:
             </>
           )}
 
-          <div style={{ marginTop: 32 }}>
+          <div ref={chatSectionRef} style={{ marginTop: 32 }}>
             <h2 style={{ fontSize: 19, fontWeight: 700, marginBottom: 10 }}>
-              Ask AI About This Code
+              Ask Debug AI About This Code
             </h2>
 
             <p
@@ -719,7 +727,7 @@ Instructions:
                 fontSize: 14,
               }}
             >
-              Ask follow-up questions about the code, the bugs, the fixes, or why something works.
+              Ask follow-up questions about the code, bugs, fixes, or past messages in this chat.
             </p>
 
             <div
@@ -778,6 +786,9 @@ Instructions:
                 display: "flex",
                 flexDirection: "column",
                 gap: 12,
+                maxHeight: 520,
+                overflowY: "auto",
+                paddingRight: 4,
               }}
             >
               {chatHistory.length === 0 ? (
@@ -791,13 +802,13 @@ Instructions:
                     fontSize: 14,
                   }}
                 >
-                  No questions yet. Try asking something like:
+                  No questions yet. Try asking:
                   <div style={{ marginTop: 8 }}>
                     • Why is line 5 wrong?
                     <br />
-                    • Can you explain this code simply?
-                    <br />
                     • Keep using namespace std; and fix only the bug
+                    <br />
+                    • Who created you?
                   </div>
                 </div>
               ) : (
@@ -827,7 +838,7 @@ Instructions:
                         marginBottom: 8,
                       }}
                     >
-                      {msg.role === "user" ? "You" : "AI"}
+                      {msg.role === "user" ? "You" : "Debug AI"}
                     </div>
 
                     <ReactMarkdown
@@ -888,6 +899,33 @@ Instructions:
                   </div>
                 ))
               )}
+
+              {chatLoading && (
+                <div
+                  style={{
+                    padding: 16,
+                    borderRadius: 14,
+                    background: "rgba(3, 7, 18, 0.85)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: "0.03em",
+                      textTransform: "uppercase",
+                      opacity: 0.7,
+                      marginBottom: 8,
+                    }}
+                  >
+                    Debug AI
+                  </div>
+                  <p style={{ margin: 0, opacity: 0.85 }}>Thinking...</p>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
             </div>
           </div>
         </div>
