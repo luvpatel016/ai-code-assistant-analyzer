@@ -100,229 +100,404 @@ function extractFixedCode(raw: string) {
   return "";
 }
 
-function RobotAssistant({ loading }: { loading: boolean }) {
+function getRobotMood(errorCount: number, loading: boolean, chatLoading: boolean) {
+  const count = Math.min(errorCount, 10);
+
+  if (loading || chatLoading) {
+    return {
+      eyeColor: "#38bdf8",
+      glow: "0 0 14px rgba(56,189,248,1)",
+      border: "rgba(96,165,250,0.35)",
+      face: "neutral",
+      bubble: "I’m watching the code closely...",
+      aura: "0 0 30px rgba(59,130,246,0.18)",
+      label: "Scanning",
+    };
+  }
+
+  if (count === 0) {
+    return {
+      eyeColor: "#22c55e",
+      glow: "0 0 14px rgba(34,197,94,0.95)",
+      border: "rgba(34,197,94,0.28)",
+      face: "happy",
+      bubble: "Hey, I’m here to help.",
+      aura: "0 0 26px rgba(34,197,94,0.16)",
+      label: "Calm",
+    };
+  }
+
+  if (count <= 2) {
+    return {
+      eyeColor: "#facc15",
+      glow: "0 0 16px rgba(250,204,21,0.95)",
+      border: "rgba(250,204,21,0.28)",
+      face: "concerned",
+      bubble: "A couple issues. Nothing too crazy.",
+      aura: "0 0 28px rgba(250,204,21,0.14)",
+      label: "Concerned",
+    };
+  }
+
+  if (count <= 5) {
+    return {
+      eyeColor: "#fb923c",
+      glow: "0 0 18px rgba(251,146,60,1)",
+      border: "rgba(251,146,60,0.3)",
+      face: "annoyed",
+      bubble: "Okay... this code is getting messy.",
+      aura: "0 0 34px rgba(251,146,60,0.18)",
+      label: "Annoyed",
+    };
+  }
+
+  if (count <= 9) {
+    return {
+      eyeColor: "#ef4444",
+      glow: "0 0 22px rgba(239,68,68,1)",
+      border: "rgba(239,68,68,0.36)",
+      face: "angry",
+      bubble: "We’ve got a serious bug situation here.",
+      aura: "0 0 40px rgba(239,68,68,0.24)",
+      label: "Angry",
+    };
+  }
+
+  return {
+    eyeColor: "#dc2626",
+    glow: "0 0 28px rgba(220,38,38,1)",
+    border: "rgba(220,38,38,0.42)",
+    face: "furious",
+    bubble: "10+ issues? Yeah... I’m not happy.",
+    aura: "0 0 50px rgba(220,38,38,0.32)",
+    label: "Furious",
+  };
+}
+
+function RobotAssistant({
+  loading,
+  chatLoading,
+  errorCount,
+}: {
+  loading: boolean;
+  chatLoading: boolean;
+  errorCount: number;
+}) {
+  const mood = getRobotMood(errorCount, loading, chatLoading);
+
+  const mouthStyles: Record<string, React.CSSProperties> = {
+    happy: {
+      width: 26,
+      height: 12,
+      borderBottom: "4px solid #cbd5e1",
+      borderRadius: "0 0 999px 999px",
+    },
+    neutral: {
+      width: 26,
+      height: 4,
+      background: "#cbd5e1",
+      borderRadius: 999,
+    },
+    concerned: {
+      width: 20,
+      height: 4,
+      background: "#e5e7eb",
+      borderRadius: 999,
+      transform: "translateX(-50%) rotate(-8deg)",
+    },
+    annoyed: {
+      width: 22,
+      height: 4,
+      background: "#fecaca",
+      borderRadius: 999,
+    },
+    angry: {
+      width: 24,
+      height: 4,
+      background: "#fecaca",
+      borderRadius: 999,
+    },
+    furious: {
+      width: 28,
+      height: 4,
+      background: "#fee2e2",
+      borderRadius: 999,
+    },
+  };
+
   return (
     <div
       style={{
-        position: "sticky",
-        top: 24,
-        alignSelf: "start",
+        background: "rgba(8, 14, 30, 0.82)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 24,
+        padding: 18,
+        boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
       }}
     >
       <div
         style={{
-          background: "rgba(8, 14, 30, 0.82)",
+          display: "flex",
+          justifyContent: "center",
+          marginBottom: 18,
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: 130,
+            height: 160,
+            animation: "robotFloat 2.6s ease-in-out infinite",
+            filter: mood.aura,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              background: mood.eyeColor,
+              boxShadow: mood.glow,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 4,
+              height: 18,
+              background: "#64748b",
+              borderRadius: 999,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: 28,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 88,
+              height: 68,
+              borderRadius: 20,
+              background: "linear-gradient(180deg, #1e293b, #0f172a)",
+              border: `2px solid ${mood.border}`,
+              boxShadow: mood.aura,
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: errorCount >= 6 && !loading && !chatLoading ? 18 : 22,
+                left: 17,
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: mood.eyeColor,
+                boxShadow: mood.glow,
+                transform: errorCount >= 6 && !loading && !chatLoading ? "rotate(-14deg)" : "none",
+                animation:
+                  loading || chatLoading
+                    ? "robotBlink 0.8s ease-in-out infinite"
+                    : errorCount >= 6
+                      ? "robotPulse 1s ease-in-out infinite"
+                      : "none",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: errorCount >= 6 && !loading && !chatLoading ? 18 : 22,
+                right: 17,
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: mood.eyeColor,
+                boxShadow: mood.glow,
+                transform: errorCount >= 6 && !loading && !chatLoading ? "rotate(14deg)" : "none",
+                animation:
+                  loading || chatLoading
+                    ? "robotBlink 0.8s ease-in-out infinite 0.2s"
+                    : errorCount >= 6
+                      ? "robotPulse 1s ease-in-out infinite 0.2s"
+                      : "none",
+              }}
+            />
+            {errorCount >= 6 && !loading && !chatLoading && (
+              <>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 16,
+                    left: 13,
+                    width: 20,
+                    height: 3,
+                    background: "#fca5a5",
+                    borderRadius: 999,
+                    transform: "rotate(18deg)",
+                    opacity: 0.9,
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 16,
+                    right: 13,
+                    width: 20,
+                    height: 3,
+                    background: "#fca5a5",
+                    borderRadius: 999,
+                    transform: "rotate(-18deg)",
+                    opacity: 0.9,
+                  }}
+                />
+              </>
+            )}
+            <div
+              style={{
+                position: "absolute",
+                bottom: mood.face === "happy" ? 10 : 13,
+                left: "50%",
+                transform:
+                  mouthStyles[mood.face].transform ?? "translateX(-50%)",
+                ...mouthStyles[mood.face],
+              }}
+            />
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              top: 100,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 72,
+              height: 42,
+              borderRadius: 18,
+              background: "linear-gradient(180deg, #172554, #0f172a)",
+              border: `2px solid ${mood.border}`,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: 100,
+              left: 16,
+              width: 18,
+              height: 42,
+              borderRadius: 999,
+              background: "#1e293b",
+              transform: "rotate(22deg)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: 100,
+              right: 16,
+              width: 18,
+              height: 42,
+              borderRadius: 999,
+              background: "#1e293b",
+              transform: "rotate(-22deg)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 40,
+              width: 14,
+              height: 34,
+              borderRadius: 999,
+              background: "#1e293b",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 0,
+              right: 40,
+              width: 14,
+              height: 34,
+              borderRadius: 999,
+              background: "#1e293b",
+            }}
+          />
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: "rgba(15, 23, 42, 0.95)",
           border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 24,
-          padding: 18,
-          boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
+          borderRadius: 18,
+          padding: "14px 16px",
+          color: "white",
+          fontSize: 14,
+          lineHeight: 1.6,
+          boxShadow: "0 10px 25px rgba(0,0,0,0.22)",
         }}
       >
         <div
           style={{
             display: "flex",
-            justifyContent: "center",
-            marginBottom: 18,
-          }}
-        >
-          <div
-            style={{
-              position: "relative",
-              width: 120,
-              height: 150,
-              animation: "robotFloat 2.6s ease-in-out infinite",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                background: "#60a5fa",
-                boxShadow: "0 0 14px rgba(96,165,250,0.8)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 12,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: 4,
-                height: 18,
-                background: "#64748b",
-                borderRadius: 999,
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 28,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: 84,
-                height: 64,
-                borderRadius: 20,
-                background: "linear-gradient(180deg, #1e293b, #0f172a)",
-                border: "2px solid rgba(96,165,250,0.35)",
-                boxShadow: "0 0 24px rgba(59,130,246,0.18)",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  top: 22,
-                  left: 18,
-                  width: 14,
-                  height: 14,
-                  borderRadius: "50%",
-                  background: "#38bdf8",
-                  boxShadow: loading
-                    ? "0 0 12px rgba(56,189,248,1)"
-                    : "0 0 10px rgba(56,189,248,0.8)",
-                  animation: loading ? "robotBlink 0.8s ease-in-out infinite" : "none",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  top: 22,
-                  right: 18,
-                  width: 14,
-                  height: 14,
-                  borderRadius: "50%",
-                  background: "#38bdf8",
-                  boxShadow: loading
-                    ? "0 0 12px rgba(56,189,248,1)"
-                    : "0 0 10px rgba(56,189,248,0.8)",
-                  animation: loading ? "robotBlink 0.8s ease-in-out infinite 0.2s" : "none",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 12,
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  width: 28,
-                  height: 4,
-                  borderRadius: 999,
-                  background: "#93c5fd",
-                  opacity: 0.9,
-                }}
-              />
-            </div>
-            <div
-              style={{
-                position: "absolute",
-                top: 96,
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: 68,
-                height: 40,
-                borderRadius: 18,
-                background: "linear-gradient(180deg, #172554, #0f172a)",
-                border: "2px solid rgba(96,165,250,0.22)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 98,
-                left: 14,
-                width: 18,
-                height: 42,
-                borderRadius: 999,
-                background: "#1e293b",
-                transform: "rotate(22deg)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 98,
-                right: 14,
-                width: 18,
-                height: 42,
-                borderRadius: 999,
-                background: "#1e293b",
-                transform: "rotate(-22deg)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: 38,
-                width: 14,
-                height: 34,
-                borderRadius: 999,
-                background: "#1e293b",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                bottom: 0,
-                right: 38,
-                width: 14,
-                height: 34,
-                borderRadius: 999,
-                background: "#1e293b",
-              }}
-            />
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: "rgba(15, 23, 42, 0.95)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 18,
-            padding: "14px 16px",
-            color: "white",
-            fontSize: 14,
-            lineHeight: 1.6,
-            boxShadow: "0 10px 25px rgba(0,0,0,0.22)",
-          }}
-        >
-          <div style={{ fontWeight: 800, marginBottom: 6, color: "#bfdbfe" }}>Debug AI</div>
-          <div>
-            {loading ? "I’m analyzing your code right now..." : "Hey, I’m here to help."}
-          </div>
-        </div>
-
-        <div
-          style={{
-            marginTop: 14,
-            display: "grid",
+            justifyContent: "space-between",
             gap: 10,
+            alignItems: "center",
+            marginBottom: 6,
           }}
         >
+          <div style={{ fontWeight: 800, color: "#bfdbfe" }}>Debug AI</div>
           <div
             style={{
-              background: "rgba(15, 23, 42, 0.82)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: 16,
-              padding: 12,
-              fontSize: 13,
-              color: "#cbd5e1",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: errorCount >= 6 ? "#fca5a5" : "#cbd5e1",
             }}
           >
-            Ask me things like:
-            <div style={{ marginTop: 8, lineHeight: 1.7 }}>
-              • Why is this line wrong?
-              <br />
-              • Fix only the bug
-              <br />
-              • Keep my coding style
-            </div>
+            {mood.label}
+          </div>
+        </div>
+        <div>{mood.bubble}</div>
+      </div>
+
+      <div
+        style={{
+          marginTop: 12,
+          display: "grid",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(15, 23, 42, 0.82)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 16,
+            padding: 12,
+            fontSize: 13,
+            color: "#cbd5e1",
+          }}
+        >
+          Error pressure:
+          <div style={{ marginTop: 8, lineHeight: 1.7 }}>
+            • 0 = calm green
+            <br />
+            • 1–2 = warning yellow
+            <br />
+            • 3–5 = annoyed orange
+            <br />
+            • 6+ = angry red
+            <br />
+            • 10+ = furious glow
           </div>
         </div>
       </div>
@@ -352,6 +527,7 @@ int main() {
   const [fixedCode, setFixedCode] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [dots, setDots] = useState<string>("");
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
 
   const [chatInput, setChatInput] = useState<string>("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -359,7 +535,6 @@ int main() {
 
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
-  const chatSectionRef = useRef<HTMLDivElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -377,6 +552,7 @@ int main() {
 
   const monacoLanguage = languageToMonaco[language] ?? "plaintext";
   const lineCount = code.split("\n").length;
+  const errorCount = diagnostics.filter((d) => d.severity === "error").length || diagnostics.length;
 
   useEffect(() => {
     if (!loading) {
@@ -393,13 +569,12 @@ int main() {
 
   useEffect(() => {
     const container = chatContainerRef.current;
+    if (!container) return;
 
-    if (container) {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: "smooth",
-      });
-    }
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
 
     chatEndRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -418,7 +593,7 @@ int main() {
     monaco.editor.setModelMarkers(model, "ai-review", []);
   }
 
-  function applyMarkers(diagnostics: Diagnostic[]) {
+  function applyMarkers(nextDiagnostics: Diagnostic[]) {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
@@ -426,7 +601,7 @@ int main() {
     const model = editor.getModel();
     if (!model) return;
 
-    const markers = diagnostics.map((d: Diagnostic) => {
+    const markers = nextDiagnostics.map((d: Diagnostic) => {
       const safeLine = Math.max(1, Math.min(d.line, model.getLineCount()));
       const severity =
         d.severity === "warning"
@@ -471,6 +646,7 @@ int main() {
     setResult("");
     setDisplayText("");
     setFixedCode("");
+    setDiagnostics([]);
     clearMarkers();
 
     let full = "";
@@ -507,8 +683,9 @@ int main() {
         setDisplayText(full);
       }
 
-      const diagnostics = safeParseDiagnostics(full);
-      applyMarkers(diagnostics);
+      const nextDiagnostics = safeParseDiagnostics(full);
+      setDiagnostics(nextDiagnostics);
+      applyMarkers(nextDiagnostics);
 
       const cleaned = prettifyMarkdown(stripJsonBlock(full));
       const finalText = cleaned || "No output returned.";
@@ -523,6 +700,7 @@ int main() {
       setResult(finalText);
       setDisplayText(finalText);
       setFixedCode("");
+      setDiagnostics([{ line: 1, message: msg, severity: "error" }]);
     } finally {
       setLoading(false);
     }
@@ -553,7 +731,6 @@ int main() {
     setChatLoading(true);
 
     requestAnimationFrame(() => {
-      chatSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       chatContainerRef.current?.scrollTo({
         top: chatContainerRef.current.scrollHeight,
         behavior: "smooth",
@@ -686,18 +863,31 @@ My creator is Luv Patel, the creator of Debug AI.
             opacity: 1;
           }
           50% {
-            transform: scale(0.8);
+            transform: scale(0.75);
             opacity: 0.7;
           }
         }
 
-        @media (max-width: 1024px) {
+        @keyframes robotPulse {
+          0%,
+          100% {
+            transform: scale(1);
+            filter: brightness(1);
+          }
+          50% {
+            transform: scale(1.08);
+            filter: brightness(1.25);
+          }
+        }
+
+        @media (max-width: 1100px) {
           .debug-layout {
             grid-template-columns: 1fr !important;
           }
 
-          .debug-robot-panel {
-            order: -1;
+          .debug-sidebar {
+            position: static !important;
+            top: auto !important;
           }
         }
       `}</style>
@@ -705,10 +895,10 @@ My creator is Luv Patel, the creator of Debug AI.
       <div
         className="debug-layout"
         style={{
-          maxWidth: 1420,
+          maxWidth: 1450,
           margin: "0 auto",
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) 320px",
+          gridTemplateColumns: "minmax(0, 1fr) 360px",
           gap: 22,
           alignItems: "start",
         }}
@@ -767,7 +957,7 @@ My creator is Luv Patel, the creator of Debug AI.
                 boxShadow: "0 0 12px rgba(34,197,94,0.8)",
               }}
             />
-            Debug AI • GPT-4.1-mini • Streaming Enabled • Diff View Ready • Chat Enabled
+            Debug AI • GPT-4.1-mini • Streaming Enabled • Diff View Ready
           </div>
 
           <div
@@ -857,7 +1047,7 @@ My creator is Luv Patel, the creator of Debug AI.
               fontSize: 12,
             }}
           >
-            {lineCount} lines • {language} • {task}
+            {lineCount} lines • {language} • {task} • {diagnostics.length} diagnostics
           </div>
 
           <h2 style={{ marginTop: 24, fontSize: 19, fontWeight: 700 }}>Output</h2>
@@ -1003,32 +1193,55 @@ My creator is Luv Patel, the creator of Debug AI.
               </div>
             </>
           )}
+        </div>
 
-          <div ref={chatSectionRef} style={{ marginTop: 32 }}>
-            <h2 style={{ fontSize: 19, fontWeight: 700, marginBottom: 10 }}>
-              Ask Debug AI About This Code
+        <div
+          className="debug-sidebar"
+          style={{
+            position: "sticky",
+            top: 24,
+            alignSelf: "start",
+            display: "grid",
+            gap: 16,
+          }}
+        >
+          <RobotAssistant loading={loading} chatLoading={chatLoading} errorCount={errorCount} />
+
+          <div
+            style={{
+              background: "rgba(8, 14, 30, 0.82)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 24,
+              padding: 18,
+              boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+            }}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 800, marginTop: 0, marginBottom: 8 }}>
+              Ask Debug AI
             </h2>
 
             <p
               style={{
                 marginTop: 0,
                 marginBottom: 12,
-                opacity: 0.72,
-                fontSize: 14,
+                opacity: 0.74,
+                fontSize: 13,
+                lineHeight: 1.6,
               }}
             >
-              Ask follow-up questions about the code, bugs, fixes, or past messages in this chat.
+              Ask questions about the code right here. The AI replies below the robot.
             </p>
 
             <div
               style={{
                 display: "flex",
+                flexDirection: "column",
                 gap: 10,
-                flexWrap: "wrap",
-                alignItems: "stretch",
               }}
             >
-              <input
+              <textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1039,15 +1252,17 @@ My creator is Luv Patel, the creator of Debug AI.
                 }}
                 placeholder="Ask anything about this code..."
                 style={{
-                  flex: 1,
-                  minWidth: 260,
+                  width: "100%",
+                  minHeight: 92,
+                  resize: "vertical",
                   padding: "12px 14px",
-                  borderRadius: 12,
+                  borderRadius: 14,
                   border: "1px solid rgba(255,255,255,0.08)",
                   background: "#0f172a",
                   color: "white",
                   outline: "none",
                   fontSize: 14,
+                  lineHeight: 1.5,
                 }}
               />
 
@@ -1063,7 +1278,7 @@ My creator is Luv Patel, the creator of Debug AI.
                   cursor: chatLoading || !chatInput.trim() ? "not-allowed" : "pointer",
                   opacity: chatLoading || !chatInput.trim() ? 0.72 : 1,
                   fontWeight: 700,
-                  minWidth: 110,
+                  width: "100%",
                 }}
               >
                 {chatLoading ? "Thinking..." : "Ask AI"}
@@ -1073,7 +1288,7 @@ My creator is Luv Patel, the creator of Debug AI.
             <div
               ref={chatContainerRef}
               style={{
-                marginTop: 18,
+                marginTop: 16,
                 display: "flex",
                 flexDirection: "column",
                 gap: 12,
@@ -1086,15 +1301,16 @@ My creator is Luv Patel, the creator of Debug AI.
               {chatHistory.length === 0 ? (
                 <div
                   style={{
-                    padding: 16,
+                    padding: 14,
                     borderRadius: 14,
                     background: "rgba(3, 7, 18, 0.75)",
                     border: "1px solid rgba(255,255,255,0.08)",
-                    opacity: 0.7,
-                    fontSize: 14,
+                    opacity: 0.76,
+                    fontSize: 13,
+                    lineHeight: 1.7,
                   }}
                 >
-                  No questions yet. Try asking:
+                  Try asking:
                   <div style={{ marginTop: 8 }}>
                     • Why is line 5 wrong?
                     <br />
@@ -1108,7 +1324,7 @@ My creator is Luv Patel, the creator of Debug AI.
                   <div
                     key={index}
                     style={{
-                      padding: 16,
+                      padding: 14,
                       borderRadius: 14,
                       background:
                         msg.role === "user"
@@ -1122,9 +1338,9 @@ My creator is Luv Patel, the creator of Debug AI.
                   >
                     <div
                       style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        letterSpacing: "0.03em",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        letterSpacing: "0.05em",
                         textTransform: "uppercase",
                         opacity: 0.7,
                         marginBottom: 8,
@@ -1139,9 +1355,9 @@ My creator is Luv Patel, the creator of Debug AI.
                         h2: ({ children }) => (
                           <h2
                             style={{
-                              marginTop: 14,
+                              marginTop: 12,
                               marginBottom: 8,
-                              fontSize: 18,
+                              fontSize: 16,
                               fontWeight: 800,
                             }}
                           >
@@ -1149,13 +1365,13 @@ My creator is Luv Patel, the creator of Debug AI.
                           </h2>
                         ),
                         ul: ({ children }) => (
-                          <ul style={{ paddingLeft: 20, marginTop: 8, marginBottom: 12 }}>
+                          <ul style={{ paddingLeft: 18, marginTop: 8, marginBottom: 10 }}>
                             {children}
                           </ul>
                         ),
-                        li: ({ children }) => <li style={{ marginBottom: 6 }}>{children}</li>,
+                        li: ({ children }) => <li style={{ marginBottom: 5 }}>{children}</li>,
                         p: ({ children }) => (
-                          <p style={{ marginTop: 8, marginBottom: 10, lineHeight: 1.7 }}>
+                          <p style={{ marginTop: 8, marginBottom: 10, lineHeight: 1.6 }}>
                             {children}
                           </p>
                         ),
@@ -1175,7 +1391,7 @@ My creator is Luv Patel, the creator of Debug AI.
                           <pre
                             style={{
                               background: "#020617",
-                              padding: 14,
+                              padding: 12,
                               borderRadius: 14,
                               overflowX: "auto",
                               border: "1px solid rgba(255,255,255,0.08)",
@@ -1195,7 +1411,7 @@ My creator is Luv Patel, the creator of Debug AI.
               {chatLoading && (
                 <div
                   style={{
-                    padding: 16,
+                    padding: 14,
                     borderRadius: 14,
                     background: "rgba(3, 7, 18, 0.85)",
                     border: "1px solid rgba(255,255,255,0.08)",
@@ -1203,9 +1419,9 @@ My creator is Luv Patel, the creator of Debug AI.
                 >
                   <div
                     style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      letterSpacing: "0.03em",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: "0.05em",
                       textTransform: "uppercase",
                       opacity: 0.7,
                       marginBottom: 8,
@@ -1220,10 +1436,6 @@ My creator is Luv Patel, the creator of Debug AI.
               <div ref={chatEndRef} />
             </div>
           </div>
-        </div>
-
-        <div className="debug-robot-panel">
-          <RobotAssistant loading={loading || chatLoading} />
         </div>
       </div>
     </main>
