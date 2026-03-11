@@ -1,4 +1,4 @@
-This is Debug Ai here is a <b>live demo: <a href="https://ai-code-assistant-analyzer-luvpatel016s-projects.vercel.app?_vercel_share=6s0zsC6ZdZppyfkphia9tvyfyruntX4u" target="_blank">AI CODE ANALYZER PROJECT</a> </b>
+<b> This is Debug Ai here is a LIVE DEMO: <a href="https://ai-code-assistant-analyzer-luvpatel016s-projects.vercel.app?_vercel_share=6s0zsC6ZdZppyfkphia9tvyfyruntX4u" target="_blank">AI CODE ANALYZER PROJECT</a> </b>
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
