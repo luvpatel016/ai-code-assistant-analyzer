@@ -100,8 +100,20 @@ function extractFixedCode(raw: string) {
   return "";
 }
 
-function getRobotMood(errorCount: number, loading: boolean, chatLoading: boolean) {
+function getRobotMood(errorCount: number, loading: boolean, chatLoading: boolean, running: boolean) {
   const count = Math.min(errorCount, 10);
+
+  if (running) {
+    return {
+      eyeColor: "#a78bfa",
+      glow: "0 0 16px rgba(167,139,250,1)",
+      border: "rgba(167,139,250,0.35)",
+      face: "neutral",
+      bubble: "Running your code right now...",
+      aura: "0 0 34px rgba(167,139,250,0.18)",
+      label: "Running",
+    };
+  }
 
   if (loading || chatLoading) {
     return {
@@ -177,13 +189,15 @@ function getRobotMood(errorCount: number, loading: boolean, chatLoading: boolean
 function RobotAssistant({
   loading,
   chatLoading,
+  running,
   errorCount,
 }: {
   loading: boolean;
   chatLoading: boolean;
+  running: boolean;
   errorCount: number;
 }) {
-  const mood = getRobotMood(errorCount, loading, chatLoading);
+  const mood = getRobotMood(errorCount, loading, chatLoading, running);
 
   const mouthStyles: Record<string, React.CSSProperties> = {
     happy: {
@@ -295,16 +309,19 @@ function RobotAssistant({
             <div
               style={{
                 position: "absolute",
-                top: errorCount >= 6 && !loading && !chatLoading ? 18 : 22,
+                top: errorCount >= 6 && !loading && !chatLoading && !running ? 18 : 22,
                 left: 17,
                 width: 14,
                 height: 14,
                 borderRadius: "50%",
                 background: mood.eyeColor,
                 boxShadow: mood.glow,
-                transform: errorCount >= 6 && !loading && !chatLoading ? "rotate(-14deg)" : "none",
+                transform:
+                  errorCount >= 6 && !loading && !chatLoading && !running
+                    ? "rotate(-14deg)"
+                    : "none",
                 animation:
-                  loading || chatLoading
+                  loading || chatLoading || running
                     ? "robotBlink 0.8s ease-in-out infinite"
                     : errorCount >= 6
                       ? "robotPulse 1s ease-in-out infinite"
@@ -314,23 +331,26 @@ function RobotAssistant({
             <div
               style={{
                 position: "absolute",
-                top: errorCount >= 6 && !loading && !chatLoading ? 18 : 22,
+                top: errorCount >= 6 && !loading && !chatLoading && !running ? 18 : 22,
                 right: 17,
                 width: 14,
                 height: 14,
                 borderRadius: "50%",
                 background: mood.eyeColor,
                 boxShadow: mood.glow,
-                transform: errorCount >= 6 && !loading && !chatLoading ? "rotate(14deg)" : "none",
+                transform:
+                  errorCount >= 6 && !loading && !chatLoading && !running
+                    ? "rotate(14deg)"
+                    : "none",
                 animation:
-                  loading || chatLoading
+                  loading || chatLoading || running
                     ? "robotBlink 0.8s ease-in-out infinite 0.2s"
                     : errorCount >= 6
                       ? "robotPulse 1s ease-in-out infinite 0.2s"
                       : "none",
               }}
             />
-            {errorCount >= 6 && !loading && !chatLoading && (
+            {errorCount >= 6 && !loading && !chatLoading && !running && (
               <>
                 <div
                   style={{
@@ -365,8 +385,7 @@ function RobotAssistant({
                 position: "absolute",
                 bottom: mood.face === "happy" ? 10 : 13,
                 left: "50%",
-                transform:
-                  mouthStyles[mood.face].transform ?? "translateX(-50%)",
+                transform: mouthStyles[mood.face].transform ?? "translateX(-50%)",
                 ...mouthStyles[mood.face],
               }}
             />
@@ -526,8 +545,11 @@ int main() {
   const [displayText, setDisplayText] = useState<string>("");
   const [fixedCode, setFixedCode] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
+  const [running, setRunning] = useState<boolean>(false);
   const [dots, setDots] = useState<string>("");
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [liveDiagnostics, setLiveDiagnostics] = useState<Diagnostic[]>([]);
+  const [runOutput, setRunOutput] = useState<string>("");
 
   const [chatInput, setChatInput] = useState<string>("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -537,6 +559,8 @@ int main() {
   const monacoRef = useRef<Monaco | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const liveScanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const liveScanRequestIdRef = useRef(0);
 
   const languageToMonaco = useMemo<Record<Language, string>>(
     () => ({
@@ -552,7 +576,9 @@ int main() {
 
   const monacoLanguage = languageToMonaco[language] ?? "plaintext";
   const lineCount = code.split("\n").length;
-  const errorCount = diagnostics.filter((d) => d.severity === "error").length || diagnostics.length;
+  const activeDiagnostics = liveDiagnostics.length > 0 ? liveDiagnostics : diagnostics;
+  const errorCount =
+    activeDiagnostics.filter((d) => d.severity === "error").length || activeDiagnostics.length;
 
   useEffect(() => {
     if (!loading) {
@@ -581,6 +607,14 @@ int main() {
       block: "end",
     });
   }, [chatHistory, chatLoading]);
+
+  useEffect(() => {
+    return () => {
+      if (liveScanTimeoutRef.current) {
+        clearTimeout(liveScanTimeoutRef.current);
+      }
+    };
+  }, []);
 
   function clearMarkers() {
     const editor = editorRef.current;
@@ -641,6 +675,56 @@ int main() {
     return full;
   }
 
+  function liveScan(nextCode: string, nextLanguage: Language) {
+    if (liveScanTimeoutRef.current) {
+      clearTimeout(liveScanTimeoutRef.current);
+    }
+
+    if (!nextCode.trim()) {
+      setLiveDiagnostics([]);
+      clearMarkers();
+      return;
+    }
+
+    const requestId = ++liveScanRequestIdRef.current;
+
+    liveScanTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: nextCode,
+            language: nextLanguage,
+            task: "Find bugs and fix suggestions",
+          }),
+        });
+
+        if (!res.ok) return;
+
+        const full = await readStreamAsText(res);
+        const nextDiagnostics = safeParseDiagnostics(full);
+
+        if (requestId !== liveScanRequestIdRef.current) return;
+
+        setLiveDiagnostics(nextDiagnostics);
+        applyMarkers(nextDiagnostics);
+      } catch {
+        // ignore live scan failures silently
+      }
+    }, 700);
+  }
+
+  function handleCodeChange(nextValue: string) {
+    setCode(nextValue);
+    liveScan(nextValue, language);
+  }
+
+  function handleLanguageChange(nextLanguage: Language) {
+    setLanguage(nextLanguage);
+    liveScan(code, nextLanguage);
+  }
+
   async function analyze() {
     setLoading(true);
     setResult("");
@@ -685,6 +769,7 @@ int main() {
 
       const nextDiagnostics = safeParseDiagnostics(full);
       setDiagnostics(nextDiagnostics);
+      setLiveDiagnostics(nextDiagnostics);
       applyMarkers(nextDiagnostics);
 
       const cleaned = prettifyMarkdown(stripJsonBlock(full));
@@ -697,12 +782,44 @@ int main() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       const finalText = `## Error\n\n${msg}`;
+      const nextDiagnostics = [{ line: 1, message: msg, severity: "error" as const }];
+
       setResult(finalText);
       setDisplayText(finalText);
       setFixedCode("");
-      setDiagnostics([{ line: 1, message: msg, severity: "error" }]);
+      setDiagnostics(nextDiagnostics);
+      setLiveDiagnostics(nextDiagnostics);
+      applyMarkers(nextDiagnostics);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runCode() {
+    if (!code.trim() || running) return;
+
+    setRunning(true);
+    setRunOutput("Running code...");
+
+    try {
+      const res = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { output?: string; error?: string };
+
+      if (!res.ok) {
+        throw new Error(data.error || `Run failed (${res.status})`);
+      }
+
+      setRunOutput(data.output?.trim() ? data.output : "Program finished with no output.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Execution failed.";
+      setRunOutput(`Execution failed.\n\n${msg}`);
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -716,9 +833,15 @@ int main() {
     await navigator.clipboard.writeText(fixedCode);
   }
 
+  async function copyRunOutput() {
+    if (!runOutput) return;
+    await navigator.clipboard.writeText(runOutput);
+  }
+
   function applyFixToEditor() {
     if (!fixedCode) return;
     setCode(fixedCode);
+    liveScan(fixedCode, language);
   }
 
   async function askAI() {
@@ -777,10 +900,7 @@ My creator is Luv Patel, the creator of Debug AI.
       setChatHistory((prev) => [...prev, { role: "assistant", content: cleaned }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      setChatHistory((prev) => [
-        ...prev,
-        { role: "assistant", content: `## Error\n\n${msg}` },
-      ]);
+      setChatHistory((prev) => [...prev, { role: "assistant", content: `## Error\n\n${msg}` }]);
     } finally {
       setChatLoading(false);
     }
@@ -930,7 +1050,7 @@ My creator is Luv Patel, the creator of Debug AI.
             }}
           >
             Paste code, choose a task, and get a streamed AI review with markdown output,
-            inline diagnostics, side-by-side fix comparison, and follow-up AI chat.
+            live diagnostics, side-by-side fix comparison, code execution, and follow-up AI chat.
           </p>
 
           <div
@@ -957,7 +1077,7 @@ My creator is Luv Patel, the creator of Debug AI.
                 boxShadow: "0 0 12px rgba(34,197,94,0.8)",
               }}
             />
-            Debug AI • GPT-4.1-mini • Streaming Enabled • Diff View Ready
+            Debug AI • GPT-4.1-mini • Streaming Enabled • Live Scan • Run Ready
           </div>
 
           <div
@@ -971,7 +1091,7 @@ My creator is Luv Patel, the creator of Debug AI.
           >
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
+              onChange={(e) => handleLanguageChange(e.target.value as Language)}
               style={selectStyle}
             >
               {LANGUAGES.map((lang) => (
@@ -1011,6 +1131,24 @@ My creator is Luv Patel, the creator of Debug AI.
               {loading ? `Analyzing${dots}` : "Analyze"}
             </button>
 
+            <button
+              onClick={runCode}
+              disabled={running || !code.trim()}
+              style={{
+                background: "linear-gradient(90deg, #059669, #10b981)",
+                color: "white",
+                border: "none",
+                padding: "10px 16px",
+                borderRadius: 12,
+                cursor: running || !code.trim() ? "not-allowed" : "pointer",
+                opacity: running || !code.trim() ? 0.72 : 1,
+                fontWeight: 700,
+                boxShadow: "0 0 24px rgba(16,185,129,0.28)",
+              }}
+            >
+              {running ? "Running..." : "Run"}
+            </button>
+
             <button onClick={copyOutput} disabled={!result} style={secondaryButtonStyle}>
               Copy Output
             </button>
@@ -1022,10 +1160,11 @@ My creator is Luv Patel, the creator of Debug AI.
               language={monacoLanguage}
               theme="vs-dark"
               value={code}
-              onChange={(value) => setCode(value || "")}
+              onChange={(value) => handleCodeChange(value || "")}
               onMount={(editor, monaco) => {
                 editorRef.current = editor;
                 monacoRef.current = monaco;
+                liveScan(code, language);
               }}
               options={{
                 minimap: { enabled: false },
@@ -1036,6 +1175,7 @@ My creator is Luv Patel, the creator of Debug AI.
                 smoothScrolling: true,
                 cursorBlinking: "smooth",
                 roundedSelection: true,
+                automaticLayout: true,
               }}
             />
           </div>
@@ -1047,7 +1187,7 @@ My creator is Luv Patel, the creator of Debug AI.
               fontSize: 12,
             }}
           >
-            {lineCount} lines • {language} • {task} • {diagnostics.length} diagnostics
+            {lineCount} lines • {language} • {task} • {activeDiagnostics.length} diagnostics
           </div>
 
           <h2 style={{ marginTop: 24, fontSize: 19, fontWeight: 700 }}>Output</h2>
@@ -1112,6 +1252,53 @@ My creator is Luv Patel, the creator of Debug AI.
             >
               {displayText || (loading ? `Analyzing${dots}` : "Run the analyzer to see results.")}
             </ReactMarkdown>
+          </div>
+
+          <div
+            style={{
+              marginTop: 18,
+              background: "#020617",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 16,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 14px",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                background: "rgba(15, 23, 42, 0.9)",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 800 }}>Run Output</div>
+              <button onClick={copyRunOutput} disabled={!runOutput} style={secondaryButtonStyle}>
+                Copy Run Output
+              </button>
+            </div>
+
+            <pre
+              style={{
+                margin: 0,
+                minHeight: 160,
+                maxHeight: 320,
+                overflow: "auto",
+                padding: 16,
+                fontSize: 13,
+                lineHeight: 1.65,
+                color: "#86efac",
+                fontFamily:
+                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {runOutput || "Program output will appear here after you click Run."}
+            </pre>
           </div>
 
           {fixedCode && (
@@ -1205,7 +1392,12 @@ My creator is Luv Patel, the creator of Debug AI.
             gap: 16,
           }}
         >
-          <RobotAssistant loading={loading} chatLoading={chatLoading} errorCount={errorCount} />
+          <RobotAssistant
+            loading={loading}
+            chatLoading={chatLoading}
+            running={running}
+            errorCount={errorCount}
+          />
 
           <div
             style={{
